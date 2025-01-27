@@ -2,6 +2,7 @@ import pdb
 from scipy.optimize import least_squares
 from scipy.special import gammaincc
 import os
+import typing
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -10,7 +11,7 @@ from plot_settings import plotparams
 plt.rcParams.update(plotparams)
 
 
-def bootstrap(data, seed=1, Nboot=100):
+def bootstrap(data: np.ndarray, Nboot: int = 100, seed=1) -> np.ndarray:
     """bootstrap samples generator -
     if input data has same size as K,
     assumes it's already a bootstrap sample
@@ -35,7 +36,7 @@ def bootstrap(data, seed=1, Nboot=100):
     return np.array(samples, dtype=data.dtype)
 
 
-def call_PDF(filename, show=True):
+def callPDF(filename: str, show: bool = True) -> None:
     """ plots matplotlib graphics into pdfs, saves and shows"""
 
     pdf = PdfPages(filename)
@@ -82,7 +83,7 @@ def err_disp(num, err, n=2, sys_err=None, **kwargs):
         return disp_str
 
 
-def st_dev(data, mean=None, **kwargs):
+def st_dev(data, mean=None, **kwargs) -> np.ndarray:
     """standard deviation function - finds stdev
     around data mean or mean provided as input"""
 
@@ -92,7 +93,7 @@ def st_dev(data, mean=None, **kwargs):
     return ((data - mean).dot(data - mean))**0.5 / n
 
 
-class stat:
+class Stat:
     """ new datatype which stores bootstrap info and
     can interacts with scalars or other instances of
     the same class for basic mathematical operations """
@@ -164,13 +165,13 @@ class stat:
         btsp = np.array([func(self.btsp[k,], **kwargs)
                          for k in range(self.N_boot)])
 
-        return stat(val=central, err="fill", btsp=btsp)
+        return Stat(val=central, err="fill", btsp=btsp)
 
     def __add__(self, other):
-        if not isinstance(other, stat):
+        if not isinstance(other, Stat):
             other = np.array(other)
-            other = stat(val=other, btsp="fill")
-        new_stat = stat(
+            other = Stat(val=other, btsp="fill")
+        new_stat = Stat(
             val=self.val + other.val,
             err="fill",
             btsp=np.array([self.btsp[k,] + other.btsp[k,]
@@ -179,10 +180,10 @@ class stat:
         return new_stat
 
     def __sub__(self, other):
-        if not isinstance(other, stat):
+        if not isinstance(other, Stat):
             other = np.array(other)
-            other = stat(val=other, btsp="fill")
-        new_stat = stat(
+            other = Stat(val=other, btsp="fill")
+        new_stat = Stat(
             val=self.val - other.val,
             err="fill",
             btsp=np.array([self.btsp[k,] - other.btsp[k,]
@@ -191,10 +192,10 @@ class stat:
         return new_stat
 
     def __mul__(self, other):
-        if not isinstance(other, stat):
+        if not isinstance(other, Stat):
             other = np.array(other)
-            other = stat(val=other, btsp="fill")
-        new_stat = stat(
+            other = Stat(val=other, btsp="fill")
+        new_stat = Stat(
             val=self.val * other.val,
             err="fill",
             btsp=np.array([self.btsp[k,] * other.btsp[k,]
@@ -203,10 +204,10 @@ class stat:
         return new_stat
 
     def __matmul__(self, other):
-        if not isinstance(other, stat):
+        if not isinstance(other, Stat):
             other = np.array(other)
-            other = stat(val=other, btsp="fill")
-        new_stat = stat(
+            other = Stat(val=other, btsp="fill")
+        new_stat = Stat(
             val=self.val @ other.val,
             err="fill",
             btsp=np.array([self.btsp[k] @ other.btsp[k]
@@ -215,10 +216,10 @@ class stat:
         return new_stat
 
     def __truediv__(self, other):
-        if not isinstance(other, stat):
+        if not isinstance(other, Stat):
             other = np.array(other)
-            other = stat(val=other, btsp="fill")
-        new_stat = stat(
+            other = Stat(val=other, btsp="fill")
+        new_stat = Stat(
             val=self.val / other.val,
             err="fill",
             btsp=np.array([self.btsp[k,] / other.btsp[k,]
@@ -227,7 +228,7 @@ class stat:
         return new_stat
 
     def __pow__(self, num):
-        new_stat = stat(
+        new_stat = Stat(
             val=self.val**num,
             err="fill",
             btsp=np.array([self.btsp[k,] ** num for k in range(self.N_boot)]),
@@ -235,19 +236,19 @@ class stat:
         return new_stat
 
     def __neg__(self):
-        new_stat = stat(val=-self.val, err=self.err, btsp=-self.btsp)
+        new_stat = Stat(val=-self.val, err=self.err, btsp=-self.btsp)
         return new_stat
 
     def __getitem__(self, indices):
         key = indices
-        new_stat = stat(val=self.val[key],
+        new_stat = Stat(val=self.val[key],
                         err=self.err[key],
                         btsp=self.btsp[(slice(None),)+key])
         return new_stat
 
 
 def join_stats(stats):
-    return stat(
+    return Stat(
         val=np.array([s.val for s in stats]),
         err=np.array([s.err for s in stats]),
         btsp=np.array([s.btsp for s in stats]).swapaxes(0, 1),
@@ -334,20 +335,20 @@ def fit_func(
         res_k = least_squares(LD_k, guess, ftol=1e-10, gtol=1e-10)
         res_btsp[k,] = res_k.x
 
-    res = stat(val=res.x, err="fill", btsp=res_btsp)
+    res = Stat(val=res.x, err="fill", btsp=res_btsp)
     if pvalue < 0.05 and chi_sq_rescale:
-        res = stat(val=res.val, err=res.err *
+        res = Stat(val=res.val, err=res.err *
                    ((chi_sq / DOF) ** 0.2), btsp="fill")
 
-    def mapping(am):
-        if not isinstance(am, stat):
-            am = stat(val=np.array(am), btsp="fill")
+    def mapping(xvals):
+        if not isinstance(xvals, Stat):
+            xvals = Stat(val=np.array(xvals), btsp="fill")
 
-        return stat(
-            val=ansatz(am.val, res.val, fit="recon"),
+        return Stat(
+            val=ansatz(xvals.val, res.val, fit="recon"),
             err="fill",
             btsp=np.array(
-                [ansatz(am.btsp[k,], res.btsp[k], fit="recon")
+                [ansatz(xvals.btsp[k,], res.btsp[k], fit="recon")
                  for k in range(Nboot)]
             ),
         )
