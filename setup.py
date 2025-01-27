@@ -16,6 +16,9 @@ def bootstrap(data, seed=1, Nboot=100):
     assumes it's already a bootstrap sample
     and does no further sampling"""
 
+    if type(seed) is str:
+        seed = int(hash(seed)) % (2**32)
+
     C = data.shape[0]
     if C == Nboot:  # goes off when data itself is bootstrap data
         samples = data
@@ -96,7 +99,8 @@ class stat:
 
     N_boot = 1000
 
-    def __init__(self, val, err=None, btsp=None, dtype=None, **kwargs):
+    def __init__(self, val, err=None, btsp=None,
+                 dtype=None, seed=None, **kwargs):
         self.val = np.array(val)
         self.shape = self.val.shape
         self.dtype = self.val.dtype if dtype is None else dtype
@@ -138,8 +142,9 @@ class stat:
 
         self.btsp = np.zeros(shape=self.shape + (self.N_boot,))
         for idx, central in np.ndenumerate(self.val):
-            if seed is not None:
-                np.random.seed(seed)
+            if type(seed) is not None:
+                if type(seed) is str:
+                    seed = int(hash(seed)) % (2**32)
                 self.seed = seed
             else:
                 if int(central) != 0:
@@ -157,7 +162,7 @@ class stat:
         central = func(self.val, **kwargs)
 
         btsp = np.array([func(self.btsp[k,], **kwargs)
-                        for k in range(self.N_boot)])
+                         for k in range(self.N_boot)])
 
         return stat(val=central, err="fill", btsp=btsp)
 
@@ -263,8 +268,8 @@ def COV(data, **kwargs):
         norm = C - 1
 
     COV = np.array([[((data[:, t1] - center[t1]).
-                      dot(data[:, t2] - center[t2])) / norm
-                     for t2 in range(T)]for t1 in range(T)])
+                    dot(data[:, t2] - center[t2])) / norm
+                   for t2 in range(T)]for t1 in range(T)])
 
     return COV
 
