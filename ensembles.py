@@ -1,10 +1,11 @@
 from setup import *
 from ensemble_parameters import parameters as pars
+from typing import Tuple, List
 
 
-def _get_masses(path: str) -> List:
-    return [float('0.{}'.format(mass[4:])) for mass in os.listdir(path)]
-
+def _get_masses(path: str) -> Tuple[List, List]:
+    folders = os.listdir(path)
+    return [float('0.{}'.format(mass[4:])) for mass in folders], folders
 
 class Ensemble:
     path = '/home/dp207/dp207/shared/projects/hadronic_D_decays/NPR/'
@@ -22,4 +23,4 @@ class Ensemble:
             pars[name]["kappa"],
             pars[name]["csw"]
         )
-        self.masses = _get_masses(self.datafolder)
+        self.masses, self.mass_paths = _get_masses(self.datafolder)
