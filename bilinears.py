@@ -1,7 +1,5 @@
 from ensembles import *
 from projectors import *
-from tqdm import tqdm
-import re
 
 
 class Bilinear:
@@ -29,9 +27,6 @@ class Bilinear:
                       plot: bool = False) -> Dict:
         Zs = self.get_all_Zs(momvar_idx, subscheme)
         extrap = {}
-
-        def chiral_ansatz(mpis, param, **kwargs):
-            return param[0] + param[1]*mpis**2
 
         for c_idx, current in enumerate(self.currents):
             extrap[current] = []
@@ -74,7 +69,7 @@ class Bilinear:
             for m_idx, mass in enumerate(self.masses):
                 ax[c_idx].errorbar(self.momenta, Zs[mass][current].val,
                                    yerr=Zs[mass][current].err, fmt='o',
-                                   capsize=4, label=f'{np.around(mass,3)}')
+                                   capsize=4, label=f'{np.around(mass, 3)}')
             ax[c_idx].set_ylabel(r'$Z_'+current+r'/Z_q$')
 
         ax[-1].set_xlabel(r'$\sqrt{q^2}$ [GeV]')
@@ -87,7 +82,7 @@ class Bilinear:
 
         return Zs
 
-    def get_Zs(self, mass: np.float128, momvar_idx: int,
+    def get_Zs(self, mass: np.float, momvar_idx: int,
                subscheme: str, plot: bool = False) -> Dict:
 
         Zs = {}
@@ -120,7 +115,7 @@ class Bilinear:
 
         return Zs
 
-    def load_Z_bls(self, mass: np.float128, momvar_idx: int,
+    def load_Z_bls(self, mass: np.float, momvar_idx: int,
                    subscheme: str) -> Dict:
 
         file = h5py.File(self.Zdata_fname, 'a')
@@ -138,7 +133,7 @@ class Bilinear:
             )
         return Zs
 
-    def save_Z_bls(self, Zs: Dict, mass: np.float128,
+    def save_Z_bls(self, Zs: Dict, mass: np.float,
                    momvar_idx: int, subscheme: str) -> None:
 
         file = h5py.File(self.Zdata_fname, 'a')
@@ -186,7 +181,7 @@ class Bilinear:
         callPDF(fname, show=False)
         print(f'plotted to {os.getcwd()}/{fname}')
 
-    def projected_vertices(self, mass: np.float128, mom: np.float128,
+    def projected_vertices(self, mass: np.float, mom: np.float,
                            momvar_idx: int, subscheme: str) -> Dict:
 
         mass_str, mom_str = self.mass_map[mass], self.mom_map[mom]
@@ -210,7 +205,7 @@ class Bilinear:
             for current in projectors.keys()
         }
 
-    def load_bl_operators(self, mass: np.float128, mom: np.float128,
+    def load_bl_operators(self, mass: np.float, mom: np.float,
                           theta_in: np.ndarray, theta_out: np.ndarray) -> Dict:
         amputees = self.load_amputated_bls(
             mass, mom, theta_in, theta_out)
@@ -225,7 +220,7 @@ class Bilinear:
                       for mu in range(N_dir-1)], [])
         }
 
-    def load_amputated_bls(self, mass: np.float128, mom: np.float128,
+    def load_amputated_bls(self, mass: np.float, mom: np.float,
                            theta_in: np.ndarray, theta_out: np.ndarray) -> np.ndarray:
 
         bilinears = self.load_bls(mass, mom, theta_in, theta_out)
@@ -238,7 +233,7 @@ class Bilinear:
         return np.array([bl_leg_ampute(bilinears[b], in_prop, out_prop)
                          for b in range(len(self.vertices))])
 
-    def load_bls(self, mass: np.float128, mom: np.float128,
+    def load_bls(self, mass: np.float, mom: np.float,
                  theta_in: np.ndarray, theta_out: np.ndarray) -> np.ndarray:
         # reads in data over all configs for a given momentum combination
 
@@ -307,13 +302,17 @@ class Bilinear:
         self.momenta = sorted(list(self.mom_map.keys()))
 
 
-def mass_str2float(mass: str) -> np.float128:
+def chiral_ansatz(mpis, param, **kwargs):
+    return param[0] + param[1]*mpis**2
+
+
+def mass_str2float(mass: str) -> np.float:
     mass = re.search(r'p(\d+\.\d+|\d+)', mass)
-    return np.float128(f"0.{mass.group(1)}")
+    return np.float(f"0.{mass.group(1)}")
 
 
 def convert_to_phys(vec: np.ndarray, L: int, T: int) -> np.ndarray:
-    vec = np.array(list(map(np.float128, vec)))
+    vec = np.array(list(map(np.float, vec)))
     L, T = L/(2*np.pi), T/(2*np.pi)
     return np.array(list(vec[:3]/L)+[vec[-1]/T])
 
@@ -331,7 +330,8 @@ def load_external_leg(ensemble: str, mass_str: str, mom_str: str,
         shape=(ens.N_cf, N_dir, N_dir, N_col, N_col), dtype='complex128')
 
     for cf in range(ens.N_cf):
-        fname = f'{path}/{mass_str}/{mom_str}/{prefix}{theta_str}.{ens.cf_list[cf]}.h5'
+        fname = f'{
+            path}/{mass_str}/{mom_str}/{prefix}{theta_str}.{ens.cf_list[cf]}.h5'
         try:
             corr = h5py.File(fname, 'r')['ExternalLeg']['corr'][0, 0, :]
         except OSError:

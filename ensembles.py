@@ -1,6 +1,7 @@
 from setup import *
 from ensemble_parameters import parameters as pars
 
+
 def _get_file_struct(path: str) -> Dict:
     folders = os.listdir(path)
     all_data
@@ -28,5 +29,3 @@ class Ensemble:
             pars[name]["kappa"],
             pars[name]["csw"]
         )
-        self.subdirectories = {level1: os.listdir('{}/{}/'.format(
-            self.datafolder, level1)) for level1 in os.listdir(self.datafolder)}
