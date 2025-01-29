@@ -1,14 +1,20 @@
+from typing import List, Dict, Tuple
 import pdb
 from scipy.optimize import least_squares
 from scipy.special import gammaincc
 import os
 import typing
+import h5py
 
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from plot_settings import plotparams
 plt.rcParams.update(plotparams)
+
+N_col = 3
+dirs = ['X', 'Y', 'Z', 'T']
+N_dir = len(dirs)
 
 
 def bootstrap(data: np.ndarray, Nboot: int = 100, seed=1) -> np.ndarray:
@@ -98,7 +104,7 @@ class Stat:
     can interacts with scalars or other instances of
     the same class for basic mathematical operations """
 
-    N_boot = 1000
+    N_boot = 100
 
     def __init__(self, val, err=None, btsp=None,
                  dtype=None, seed=None, **kwargs):
@@ -241,6 +247,8 @@ class Stat:
 
     def __getitem__(self, indices):
         key = indices
+        if not isinstance(key, tuple):
+            key = (key,)
         new_stat = Stat(val=self.val[key],
                         err=self.err[key],
                         btsp=self.btsp[(slice(None),)+key])
@@ -297,6 +305,12 @@ def fit_func(
     Nboot=100,
     **kwargs,
 ):
+
+    if not isinstance(x, Stat):
+        x = Stat(
+            val=x,
+            err=np.zeros(shape=np.array(x).shape),
+            btsp='fill')
 
     if type(end) is None:
         end = len(x.val)
