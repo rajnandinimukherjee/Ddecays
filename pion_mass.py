@@ -135,15 +135,23 @@ class TwoPointFn:
         )
         return twopf
 
-    def plot_cfgs(self, mass: float) -> None:
+    def plot_cfgs(self, mass: float, plotrange: np.ndarray) -> None:
 
         data, corr = self.load_meson(mass)
         fig, ax = plt.subplots()
         for c_idx, cf in enumerate(self.cf_list):
-            ax.plot(np.arange(self.ens.T), np.log(
-                data[c_idx, :]), label=str(cf))
+            ax.plot(plotrange[1:-1],
+                    m_eff(data[c_idx, plotrange]), label=str(cf))
+        ymin, ymax = ax.get_ylim()
+
+        meff_corr = corr.use_func(m_eff)
+        ax.errorbar(np.arange(2, len(corr.val)), meff_corr.val,
+                    yerr=meff_corr.err, c='k', capsize=4, fmt='o',
+                    label='btsp')
         ax.legend()
-        ax.set_ylabel(r'$\logC^\mathrm{2pt}_\pi(t,cf)$')
+        ax.set_ylim([ymin, ymax])
+        ax.set_xlim([plotrange[0], plotrange[-1]])
+        ax.set_ylabel(r'$m_\mathrm{eff}^\mathrm{2pt}(t,\mathrm{cf})$')
         ax.set_xlabel(r'$t/a$')
         ax.set_title(r'$am_q=-'+str(np.around(mass, 3))+r'$')
 
@@ -177,7 +185,7 @@ class TwoPointFn:
         twopf = Stat(
             val=np.mean(data, axis=0),
             err='fill',
-            btsp=bootstrap(data, seed=self.ens.name+'V')
+            btsp=bootstrap(data, seed=self.ens.name+'V'),
         )
 
         # fold

@@ -99,7 +99,7 @@ def st_dev(data, mean=None, **kwargs) -> np.ndarray:
     n = len(data)
     if mean is None:
         mean = np.mean(data)
-    return ((data - mean).dot(data - mean))**0.5 / n
+    return ((data - mean).dot(data - mean)/n)**0.5
 
 
 class Stat:
@@ -379,3 +379,7 @@ def fit_func(
         pdb.set_trace()
 
     return res
+
+
+def foldcorr(corr: np.ndarray, T: int) -> np.ndarray:
+    return 0.5*(corr[1:]+corr[::-1][:-1])[:int(T/2)]
