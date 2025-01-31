@@ -7,7 +7,8 @@ parameters = {
         "kappa_add": "l",
         "csw": '2.095108',
         "a": 0.12*5.068,
-        "val_cfgs": range(8, 824+1, 16),
+        # "val_cfgs": range(8, 824+1, 16),
+        "val_cfgs": range(100, 1000+1, 100),
         "NPR_cfgs": range(100, 1000+1, 100)
     },
     "M": {
@@ -18,7 +19,8 @@ parameters = {
         "kappa_add": "ls",
         "csw": '1.95524',
         "a": 0.094*5.068,
-        "val_cfgs": range(8, 824+1, 16),
+        # "val_cfgs": range(8, 824+1, 16),
+        "val_cfgs": range(100, 600+1, 50),
         "NPR_cfgs": range(100, 600+1, 50)
     },
     "F": {
@@ -29,7 +31,8 @@ parameters = {
         "kappa_add": "l",
         "csw": '1.783303',
         "a": 0.064*5.068,
-        "val_cfgs": range(8, 584+1, 16),
+        # "val_cfgs": range(8, 584+1, 16),
+        "val_cfgs": range(250, 550+1, 50),
         "NPR_cfgs": range(50, 550+1, 50)
     }
 }

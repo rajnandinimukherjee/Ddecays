@@ -16,11 +16,11 @@ class TwoPointFn:
             raise "Need to specify src and snk gamma structure. " +\
                 "See TwoPointFn.vertices for accepted str formats."
 
-        self.path = self.ens.datafolder+'/mass_scan/scan'
+        name = self.ens.datafolder.rsplit('/')[-1]
+        self.path = self.ens.path+f'hadronic_ward_identity/{name}/s0g0'
         self.cf_list = pars[self.ens.name]['val_cfgs']
         self.N_cf = len(self.cf_list)
 
-        name = self.ens.datafolder.rsplit('/')[-1]
         self.Zdata_fname = f'Z_factors/{name}.hd5'
 
         self.compute = compute
@@ -31,7 +31,7 @@ class TwoPointFn:
                              h5py.File(self.Zdata_fname, 'r')['pion'].keys()}
             self.masses = sorted(list(self.mass_map.keys()))
 
-    def load_meson_masses(self, plot: bool = False) -> List:
+    def load_meson_masses(self, plot: bool = False, **kwargs) -> List:
 
         mesons = []
         for mass in self.masses:
@@ -46,7 +46,8 @@ class TwoPointFn:
             mesons.append(mpi)
 
         if plot:
-            fig, ax = plt.subplots()
+            if 'ax' not in kwargs:
+                fig, ax = plt.subplots()
             x = -np.array(self.masses)
             y = join_stats(mesons)**2
             ax.errorbar(x, y.val, yerr=y.err,
@@ -54,9 +55,10 @@ class TwoPointFn:
             ax.set_xlabel(r'$am_q$')
             ax.set_ylabel(r'$m_\pi^2$ [GeV${}^2$]')
 
-            fname = f'plots/{self.ens.name}_mpi_variation.pdf'
-            callPDF(fname, show=False)
-            print(f'plot saved to {fname}')
+            if 'ax' not in kwargs:
+                fname = f'plots/{self.ens.name}_mpi_variation.pdf'
+                callPDF(fname, show=False)
+                print(f'plot saved to {fname}')
 
         return mesons
 
@@ -133,12 +135,16 @@ class TwoPointFn:
 
     def load_meson(self, mass: float, save: bool = True) -> Stat:
 
-        files = [f'{self.path}/{self.mass_map[mass][1:]}_scan/mesons/two_point_0.{cf}.h5'
+        files = [f'{self.path}/{self.mass_map[mass][1:]}_s0g0/mesons/two_point_0.{cf}.h5'
                  for cf in self.cf_list]
 
-        meson_grp = find_meson_group(files[0], self.gamma_src, self.gamma_snk)
+        try:
+            meson_grp = find_meson_group(
+                files[0], self.gamma_src, self.gamma_snk)
+        except OSError:
+            pdb.set_trace()
 
-        data = np.zeros(shape=(self.N_cf, self.ens.T), dtype='complex128')
+        data = np.zeros(shape=(self.N_cf, self.ens.T))
 
         for cf in range(self.N_cf):
             try:
@@ -148,7 +154,7 @@ class TwoPointFn:
                 pdb.set_trace()
             for vx in range(len(TwoPointFn.vertices)):
                 corr = file['corr'][:]
-                data[cf, :] = np.array(corr["re"]+1j*corr["im"])
+                data[cf, :] = np.array(corr["re"])
 
         twopf = Stat(
             val=np.mean(data, axis=0),
@@ -185,9 +191,8 @@ def constant_ansatz(t, param, **kwargs):
     return param[0]*np.ones(len(t))
 
 
-def mass_str2float(mass: str) -> float:
-    mass = re.search(r'p(\d+\.\d+|\d+)', mass)
-    return float(f"0.{mass.group(1)}")
+def linear_ansatz(t, param, **kwargs):
+    return param[0] + param[1]*t
 
 
 def find_meson_group(fname: str, gamma_src: str, gamma_snk: str) -> str:
@@ -197,3 +202,13 @@ def find_meson_group(fname: str, gamma_src: str, gamma_snk: str) -> str:
             if file[group].attrs['gamma_snk'][0].decode('utf-8') == gamma_snk:
                 return group
     raise f'{gamma_src}x{gamma_snk} meson group not found in {fname}.'
+
+
+def closest_n_points(self, target: float, values: np.ndarray, n: int) -> List:
+    diff = list(np.abs(values-target))
+    sort = sorted(diff)
+    closest_idx = []
+    for n_idx in range(n):
+        nth_closest_point = diff.index(sort[n_idx])
+        closest_idx.append[nth_closest_point]
+    return closest_idx
