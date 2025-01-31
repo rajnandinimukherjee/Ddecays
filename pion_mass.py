@@ -66,8 +66,10 @@ class TwoPointFn:
                   ansatz: str = 'cosh', plot: bool = True,
                   plotrange=None, save: bool = True) -> Stat:
 
-        twopf = self.load_meson(
-            mass, save=False) if self.compute else self.read_meson(mass)
+        if self.compute:
+            data, twopf = self.load_meson(mass, save=False)
+        else:
+            twopf = self.read_meson(mass)
 
         meff = twopf.use_func(m_eff, ansatz=ansatz)*self.ens.ainv
 
@@ -133,7 +135,23 @@ class TwoPointFn:
         )
         return twopf
 
-    def load_meson(self, mass: float, save: bool = True) -> Stat:
+    def plot_cfgs(self, mass: float) -> None:
+
+        data, corr = self.load_meson(mass)
+        fig, ax = plt.subplots()
+        for c_idx, cf in enumerate(self.cf_list):
+            ax.plot(np.arange(self.ens.T), np.log(
+                data[c_idx, :]), label=str(cf))
+        ax.legend()
+        ax.set_ylabel(r'$\logC^\mathrm{2pt}_\pi(t,cf)$')
+        ax.set_xlabel(r'$t/a$')
+        ax.set_title(r'$am_q=-'+str(np.around(mass, 3))+r'$')
+
+        fname = f'plots/{self.ens.name}_pion2pf_cfgs.pdf'
+        callPDF(fname, show=False)
+        print(f'plot saved to {fname}')
+
+    def load_meson(self, mass: float, save: bool = True) -> Tuple[List, Stat]:
 
         files = [f'{self.path}/{self.mass_map[mass][1:]}_s0g0/mesons/two_point_0.{cf}.h5'
                  for cf in self.cf_list]
@@ -163,7 +181,7 @@ class TwoPointFn:
         )
 
         # fold
-        twopf = (twopf+twopf[::-1])[:int(self.ens.T/2)]*0.5
+        twopf = (twopf[1:]+twopf[::-1][:-1])[:int(self.ens.T/2)]*0.5
 
         if save:
             file = h5py.File(self.Zdata_fname, 'a')
@@ -179,7 +197,7 @@ class TwoPointFn:
 
             print(f'saved data to {grp_name} in {self.Zdata_fname}')
 
-        return twopf
+        return data, twopf
 
     def create_attributes(self) -> None:
         self.mass_map = {mass_str2float('m'+mass.rsplit('_')[0]): 'm'+mass.rsplit('_')[0]
