@@ -1,5 +1,7 @@
 from setup import *
 
+N_cN_d = N_col*N_dir
+
 gamma = {
     "I": np.identity(N_dir, dtype="complex128"),
     "X": np.zeros(shape=(N_dir, N_dir), dtype="complex128"),
@@ -31,6 +33,15 @@ def tensordot(A: np.ndarray, B: np.ndarray) -> np.ndarray:
     return np.tensordot(A, B, axes=([1, 3], [0, 2])).transpose(0, 2, 1, 3)
 
 
+def doubletensordot(A: np.ndarray, B: np.ndarray) -> np.ndarray:
+    """ matrix multiplication of (N_dir,N_dir,N_col,N_col,N_dir,N_dir,N_col,N_col)
+    data to contract spacetime and colour indices; equivalent to
+    np.einsum('abcdefgh,bidjfkhl-> aicjekgl', A, B)
+    """
+    return np.tensordot(A, B, axes=([1, 3, 5, 7], [0, 2, 4, 6])).transpose(
+        0, 4, 1, 5, 2, 6, 3, 7)
+
+
 def Stattensordot(A, B) -> Stat:
     """ tensordot method under the bootstrap """
     if type(A) is not Stat:
@@ -57,18 +68,29 @@ def tensortrace(A: np.ndarray) -> np.ndarray:
     """ trace of (N_dir,N_dir,N_col,N_col) data
     over spacetime and colour indices
     """
-    return np.trace(A.swapaxes(1, 2).reshape(12, 12))
+    return np.trace(A.swapaxes(1, 2).reshape(
+        N_cN_d, N_cN_d))
+
+
+def doubletensortrace(A: np.ndarray) -> np.ndarray:
+    """ trace of (N_dir,N_dir,N_col,N_col,N_dir,N_dir,N_col,N_col)
+    data over spacetime and colour indices
+    """
+    return np.trace(A.swapaxes(1, 2).swapaxes(5, 6).reshape(
+        N_cN_d, N_cN_d, N_cN_d, N_cN_d).reshape(N_cN_d**2, N_cN_d**2))
 
 
 def tensorinv(A: np.ndarray) -> np.ndarray:
     """ inverse of (N_dir,N_dir,N_col,N_col) data """
-    return np.linalg.inv(A.swapaxes(1, 2).reshape((12, 12), order='F')).reshape(
+    return np.linalg.inv(A.swapaxes(1, 2).reshape((
+        N_cN_d, N_cN_d), order='F')).reshape(
         (4, 3, 4, 3), order='F').swapaxes(2, 1)
 
 
 def tensorhermitian(A: np.ndarray) -> np.ndarray:
     """ hermitian conjugate of (N_dir,N_dir,N_col,N_col) data """
-    return (np.conj(A.swapaxes(1, 2).reshape((12, 12), order='F')).T).reshape(
+    return (np.conj(A.swapaxes(1, 2).reshape(
+        (N_cN_d, N_cN_d), order='F')).T).reshape(
         (4, 3, 4, 3), order='F').swapaxes(2, 1)
 
 
@@ -107,3 +129,25 @@ def bilinear_projectors(subscheme: str, qvec: np.ndarray) -> Dict:
                    for curr, proj in projectors.items()}
     return {curr: [mtx/tree_values[curr] for mtx in proj]
             for curr, proj in projectors.items()}
+
+
+def fourquark_projectors(subscheme: str, qvec: np.ndarray) -> Dict:
+    if subscheme == 'gamma':
+        sGamma = {i: Gamma[i] for i in dirs}
+
+    elif subscheme == 'qslash':
+        if type(qvec) is not np.ndarray:
+            raise 'Need vector q (np.ndarray) for qslash scheme'
+        qslash = np.sum([qvec[i] * Gamma[dirs[i]]
+                         for i in range(N_dir)], axis=0)
+        qsq = qvec.dot(qvec)
+
+        # replace \gamma_\mu with \slashed{q}q_\mu/q^2
+        sGamma = {dirs[i]: qslash*qvec[i]/qsq for i in range(N_dir)}
+
+    else:
+        raise 'subscheme input is either gamma or qslash (str)'
+
+    doubles = {
+        "AV": [np.einsum('abcd,efgh->abcdefgh')]
+    }

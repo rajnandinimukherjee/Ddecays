@@ -1,12 +1,8 @@
-from ensembles import *
 from projectors import *
+from pion_mass import *
 
 
 class Bilinear:
-    vertices = ['Identity', 'Gamma5',
-                'GammaX', 'GammaY', 'GammaZ', 'GammaT',
-                'GammaXGamma5', 'GammaYGamma5', 'GammaZGamma5', 'GammaTGamma5',
-                'SigmaXT', 'SigmaXY', 'SigmaXZ', 'SigmaYT', 'SigmaYZ', 'SigmaZT']
     currents = ['S', 'P', 'V', 'A', 'T']
 
     def __init__(self, ensemble: str, scheme: str = 'SMOM',
@@ -14,10 +10,12 @@ class Bilinear:
         self.ens = Ensemble(ensemble)
         self.scheme = scheme
         self.prefix = f'{scheme}_Bilinear_00_'
-        self.path = self.ens.datafolder
+        self.path = self.ens.datafolder+'/npr_data'
         self.compute = compute
+        self.cf_list = pars[self.ens.name]['NPR_cfgs']
+        self.N_cf = len(self.cf_list)
 
-        name = self.ens.datafolder.rsplit('/')[-2]
+        name = self.path.rsplit('/')[-2]
         self.Zdata_fname = f'Z_factors/{name}.hd5'
 
         if self.compute:
@@ -42,7 +40,7 @@ class Bilinear:
             sublabel = r'\gamma_\mu' if subscheme == 'gamma' else r'\not{q}'
             title = self.scheme+r'$^{'+sublabel + \
                 r'}$, $m_\pi=0$ mom combo '+str(momvar_idx+1)
-            fname = f'plots/Zs_chiral_extrap_tw{momvar_idx}.pdf'
+            fname = f'plots/{self.ens.name}_Zs_chiral_extrap_tw{momvar_idx}.pdf'
             self.plot_Z_bls(extrap, title, fname)
 
         return extrap
@@ -76,13 +74,13 @@ class Bilinear:
         handles, labels = ax[-1].get_legend_handles_labels()
         fig.legend(handles, labels, loc='center right')
 
-        fname = f'plots/Zs_all_masses_tw{momvar_idx}.pdf'
+        fname = f'plots/{self.ens.name}_Zs_all_masses_tw{momvar_idx}.pdf'
         callPDF(fname, show=False)
         print(f'plotted to {os.getcwd()}/{fname}')
 
         return Zs
 
-    def get_Zs(self, mass: np.float, momvar_idx: int,
+    def get_Zs(self, mass: float, momvar_idx: int,
                subscheme: str, plot: bool = False) -> Dict:
 
         Zs = {}
@@ -110,12 +108,12 @@ class Bilinear:
             sublabel = r'\gamma_\mu' if subscheme == 'gamma' else r'\not{q}'
             title = self.scheme+r'$^{'+sublabel+r'}$, $m_\pi=' +\
                 str(np.around(mass, 3))+r'$ mom combo '+str(momvar_idx+1)
-            fname = f'plots/Zs_{self.mass_map[mass]}_tw{momvar_idx}.pdf'
+            fname = f'plots/{self.ens.name}_Zs_{self.mass_map[mass]}_tw{momvar_idx}.pdf'
             self.plot_Z_bls(Zs, title, fname)
 
         return Zs
 
-    def load_Z_bls(self, mass: np.float, momvar_idx: int,
+    def load_Z_bls(self, mass: float, momvar_idx: int,
                    subscheme: str) -> Dict:
 
         file = h5py.File(self.Zdata_fname, 'a')
@@ -133,7 +131,7 @@ class Bilinear:
             )
         return Zs
 
-    def save_Z_bls(self, Zs: Dict, mass: np.float,
+    def save_Z_bls(self, Zs: Dict, mass: float,
                    momvar_idx: int, subscheme: str) -> None:
 
         file = h5py.File(self.Zdata_fname, 'a')
@@ -152,7 +150,7 @@ class Bilinear:
             grp.create_dataset(f'{current}/errors', data=Zs[current].err)
             grp.create_dataset(f'{current}/bootstrap', data=Zs[current].btsp)
 
-        print(f'saved data to {grp_name} in {fname}')
+        print(f'saved data to {grp_name} in {self.Zdata_fname}')
 
     def plot_Z_bls(self, Zs: Dict, title: str, fname: str) -> None:
 
@@ -181,7 +179,7 @@ class Bilinear:
         callPDF(fname, show=False)
         print(f'plotted to {os.getcwd()}/{fname}')
 
-    def projected_vertices(self, mass: np.float, mom: np.float,
+    def projected_vertices(self, mass: float, mom: float,
                            momvar_idx: int, subscheme: str) -> Dict:
 
         mass_str, mom_str = self.mass_map[mass], self.mom_map[mom]
@@ -205,22 +203,22 @@ class Bilinear:
             for current in projectors.keys()
         }
 
-    def load_bl_operators(self, mass: np.float, mom: np.float,
+    def load_bl_operators(self, mass: float, mom: float,
                           theta_in: np.ndarray, theta_out: np.ndarray) -> Dict:
         amputees = self.load_amputated_bls(
             mass, mom, theta_in, theta_out)
 
         return {
-            "S": [amputees[self.vertices.index('Identity')]],
-            "P": [amputees[self.vertices.index('Gamma5')]],
-            "V": [amputees[self.vertices.index(f'Gamma{mu}')] for mu in dirs],
-            "A": [amputees[self.vertices.index(f'Gamma{mu}Gamma5')] for mu in dirs],
-            "T": sum([[amputees[self.vertices.index(f'Sigma{dirs[mu]}{dirs[nu]}')]
+            "S": [amputees[TwoPointFn.vertices.index('Identity')]],
+            "P": [amputees[TwoPointFn.vertices.index('Gamma5')]],
+            "V": [amputees[TwoPointFn.vertices.index(f'Gamma{mu}')] for mu in dirs],
+            "A": [amputees[TwoPointFn.vertices.index(f'Gamma{mu}Gamma5')] for mu in dirs],
+            "T": sum([[amputees[TwoPointFn.vertices.index(f'Sigma{dirs[mu]}{dirs[nu]}')]
                        for nu in range(mu+1, N_dir)]
                       for mu in range(N_dir-1)], [])
         }
 
-    def load_amputated_bls(self, mass: np.float, mom: np.float,
+    def load_amputated_bls(self, mass: float, mom: float,
                            theta_in: np.ndarray, theta_out: np.ndarray) -> np.ndarray:
 
         bilinears = self.load_bls(mass, mom, theta_in, theta_out)
@@ -231,9 +229,9 @@ class Bilinear:
             self.ens.name, mass_str, mom_str, theta_out)
 
         return np.array([bl_leg_ampute(bilinears[b], in_prop, out_prop)
-                         for b in range(len(self.vertices))])
+                         for b in range(len(TwoPointFn.vertices))])
 
-    def load_bls(self, mass: np.float, mom: np.float,
+    def load_bls(self, mass: float, mom: float,
                  theta_in: np.ndarray, theta_out: np.ndarray) -> np.ndarray:
         # reads in data over all configs for a given momentum combination
 
@@ -242,18 +240,18 @@ class Bilinear:
 
         files = [f'{self.path}/{self.mass_map[mass]}/{self.mom_map[mom]}' +
                  f'/{self.prefix}{theta_in_str}_{theta_out_str}.{cf}.h5'
-                 for cf in self.ens.cf_list]
+                 for cf in self.cf_list]
 
-        data = np.empty(shape=(self.ens.N_cf, len(self.vertices), N_dir,
+        data = np.empty(shape=(self.N_cf, len(TwoPointFn.vertices), N_dir,
                                N_dir, N_col, N_col), dtype='complex128')
 
-        for cf in range(self.ens.N_cf):
+        for cf in range(self.N_cf):
             try:
                 file = h5py.File(files[cf], 'r')['Bilinear']
             except OSError:
                 print(files[cf])
                 pdb.set_trace()
-            for vx in range(len(self.vertices)):
+            for vx in range(len(TwoPointFn.vertices)):
                 corr = file[f'Bilinear_{vx}']['corr'][0, 0, :]
                 data[cf, vx] = np.array(corr["re"]+1j*corr["im"])
 
@@ -261,11 +259,11 @@ class Bilinear:
             val=np.mean(data[:, b_idx], axis=0),
             err='fill',
             btsp=bootstrap(data[:, b_idx], seed=self.ens.name)
-        ) for b_idx in range(len(self.vertices))], dtype=object)
+        ) for b_idx in range(len(TwoPointFn.vertices))], dtype=object)
 
         return bilinears
 
-    def _get_bl_list(self, path: str) -> np.ndarray:
+    def get_bl_list(self, path: str) -> np.ndarray:
         # get the list of bilinear momentum combinations
 
         all_files = [f for f in os.listdir(path) if f.startswith(self.prefix)]
@@ -279,7 +277,7 @@ class Bilinear:
                     '_'.join(mom1)+'_'+'_'.join(mom2)
                 other_configs = [
                     f for f in all_files if f.startswith(partial_str)]
-                if len(other_configs) == self.ens.N_cf:
+                if len(other_configs) == self.N_cf:
                     mom_combinations.append([mom1, mom2])
                 else:
                     print(f'only {len(other_configs)} config files' +
@@ -288,9 +286,9 @@ class Bilinear:
         return mom_combinations
 
     def create_attributes(self) -> None:
-        self.theta_str = {mass_str: {mom_str: self._get_bl_list(f'{self.path}/{mass_str}/{mom_str}')
+        self.theta_str = {mass_str: {mom_str: self.get_bl_list(f'{self.path}/{mass_str}/{mom_str}')
                                      for mom_str in os.listdir(f'{self.path}/{mass_str}')}
-                          for mass_str in os.listdir(self.ens.datafolder)}
+                          for mass_str in os.listdir(self.path)}
 
         self.mass_map = {mass_str2float(
             mass): mass for mass in self.theta_str.keys()}
@@ -306,13 +304,8 @@ def chiral_ansatz(mpis, param, **kwargs):
     return param[0] + param[1]*mpis**2
 
 
-def mass_str2float(mass: str) -> np.float:
-    mass = re.search(r'p(\d+\.\d+|\d+)', mass)
-    return np.float(f"0.{mass.group(1)}")
-
-
 def convert_to_phys(vec: np.ndarray, L: int, T: int) -> np.ndarray:
-    vec = np.array(list(map(np.float, vec)))
+    vec = np.array(list(map(float, vec)))
     L, T = L/(2*np.pi), T/(2*np.pi)
     return np.array(list(vec[:3]/L)+[vec[-1]/T])
 
@@ -323,15 +316,16 @@ def load_external_leg(ensemble: str, mass_str: str, mom_str: str,
 
     ens = Ensemble(ensemble)
     prefix = 'ExternalLeg_0_'
-    path = ens.datafolder
+    path = ens.datafolder+'/npr_data'
     theta_str = '_'.join(theta)
+    cf_list = pars[ensemble]['NPR_cfgs']
+    N_cf = len(cf_list)
 
     data = np.empty(
-        shape=(ens.N_cf, N_dir, N_dir, N_col, N_col), dtype='complex128')
+        shape=(N_cf, N_dir, N_dir, N_col, N_col), dtype='complex128')
 
-    for cf in range(ens.N_cf):
-        fname = f'{
-            path}/{mass_str}/{mom_str}/{prefix}{theta_str}.{ens.cf_list[cf]}.h5'
+    for cf in range(N_cf):
+        fname = f'{path}/{mass_str}/{mom_str}/{prefix}{theta_str}.{cf_list[cf]}.h5'
         try:
             corr = h5py.File(fname, 'r')['ExternalLeg']['corr'][0, 0, :]
         except OSError:

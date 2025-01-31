@@ -10,7 +10,6 @@ def _get_file_struct(path: str) -> Dict:
 
 class Ensemble:
     path = '/home/dp207/dp207/shared/projects/hadronic_D_decays/NPR/'
-    N_cf = 10
     cf_list = np.arange(100, 1000+1, 100)
 
     def __init__(self, name: str) -> None:
@@ -21,7 +20,7 @@ class Ensemble:
         self.ainv = 1/self.a
 
         self.seed = int(hash(name)) % (2**32)
-        self.datafolder = self.path+'t{}l{}_b{}_k{}{}_csw{}/npr_data'.format(
+        self.datafolder = self.path+'t{}l{}_b{}_k{}{}_csw{}'.format(
             self.T,
             self.L,
             pars[name]["beta"],
