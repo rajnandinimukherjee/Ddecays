@@ -70,7 +70,7 @@ class TwoPointFn:
         meff = twopf.use_func(m_eff, ansatz=ansatz)*self.ens.ainv
 
         res = fit_func(fitrange, meff[fitrange],
-                       constant_ansatz, [1, 0], correlated=True)
+                       constant_ansatz, [1, 0], correlated=False)
         mpi = res[0]
         mpi.chi_sq, mpi.DOF, mpi.pvalue = res.chi_sq, res.DOF, res.pvalue
 
@@ -157,7 +157,6 @@ class TwoPointFn:
         )
 
         # fold
-        # twopf = (twopf[1:]+twopf[::-1][:-1])[:int(self.ens.T/2)]*0.5
         twopf = (twopf+twopf[::-1])[:int(self.ens.T/2)]*0.5
 
         if save:
