@@ -16,20 +16,20 @@ class TwoPointFn:
             raise "Need to specify src and snk gamma structure. " +\
                 "See TwoPointFn.vertices for accepted str formats."
 
-        name = self.ens.datafolder.rsplit('/')[-1]
-        self.path = self.ens.path+f'hadronic_ward_identity/{name}/s0g0'
-        self.cf_list = pars[self.ens.name]['val_cfgs']
-        self.N_cf = len(self.cf_list)
+        self.path = self.ens.path + \
+            f'hadronic_ward_identity/{self.ens.dataname}/s0g0'
 
-        self.Zdata_fname = f'Z_factors/{name}.hd5'
+        self.Zdata_fname = f'Z_factors/{self.ens.dataname}.hd5'
 
         self.compute = compute
-        if compute:
-            self.create_attributes()
+        if self.compute:
+            self.mass_map, self.cf_list = self.ens.config_counter(
+                data='valence', prefix=f'two_point', show=False)
+            self.N_cf = len(self.cf_list)
         else:
-            self.mass_map = {mass_str2float(mass): mass for mass in
-                             h5py.File(self.Zdata_fname, 'r')['pion'].keys()}
-            self.masses = sorted(list(self.mass_map.keys()))
+            self.mass_map = {mass_str2float(mass_str): mass_str
+                             for mass_str in h5py.File(self.Zdata_fname, 'r')['Pion'].keys()}
+        self.masses = sorted(list(self.mass_map.keys()))
 
     def load_meson_masses(self, plot: bool = False, **kwargs) -> List:
 
@@ -37,7 +37,7 @@ class TwoPointFn:
         for mass in self.masses:
 
             file = h5py.File(self.Zdata_fname, 'r')
-            grp_name = f'pion/{self.mass_map[mass]}/fit'
+            grp_name = f'Pion/{self.mass_map[mass]}/fit'
             mpi = Stat(
                 val=np.array(file[grp_name+'/central']),
                 err=np.array(file[grp_name+'/errors']),
@@ -107,7 +107,7 @@ class TwoPointFn:
 
         if save:
             file = h5py.File(self.Zdata_fname, 'a')
-            grp_name = f'pion/{self.mass_map[mass]}/fit'
+            grp_name = f'Pion/{self.mass_map[mass]}/fit'
 
             if grp_name in file.keys():
                 del file[grp_name]
@@ -126,7 +126,7 @@ class TwoPointFn:
     def read_meson(self, mass: float) -> Stat:
 
         file = h5py.File(self.Zdata_fname, 'a')
-        grp_name = f'pion/{self.mass_map[mass]}/corr'
+        grp_name = f'Pion/{self.mass_map[mass]}/corr'
 
         twopf = Stat(
             val=np.array(file[grp_name]['central'][:]),
@@ -161,7 +161,7 @@ class TwoPointFn:
 
     def load_meson(self, mass: float, save: bool = True) -> Tuple[List, Stat]:
 
-        files = [f'{self.path}/{self.mass_map[mass][1:]}_s0g0/mesons/two_point_0.{cf}.h5'
+        files = [f'{self.path}/{self.mass_map[mass]}/mesons/two_point_0.{cf}.h5'
                  for cf in self.cf_list]
 
         try:
@@ -193,7 +193,7 @@ class TwoPointFn:
 
         if save:
             file = h5py.File(self.Zdata_fname, 'a')
-            grp_name = f'pion/{self.mass_map[mass]}/corr'
+            grp_name = f'Pion/{self.mass_map[mass]}/corr'
 
             if grp_name in file.keys():
                 del file[grp_name]
@@ -206,11 +206,6 @@ class TwoPointFn:
             print(f'saved data to {grp_name} in {self.Zdata_fname}')
 
         return data, twopf
-
-    def create_attributes(self) -> None:
-        self.mass_map = {mass_str2float('m'+mass.rsplit('_')[0]): 'm'+mass.rsplit('_')[0]
-                         for mass in os.listdir(self.path)}
-        self.masses = sorted(list(self.mass_map.keys()))
 
 
 def constant_ansatz(t, param, **kwargs):

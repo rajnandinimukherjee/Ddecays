@@ -12,14 +12,19 @@ class Bilinear:
         self.prefix = f'{scheme}_Bilinear_00_'
         self.path = self.ens.datafolder+'/npr_data'
         self.compute = compute
-        self.cf_list = pars[self.ens.name]['NPR_cfgs']
-        self.N_cf = len(self.cf_list)
 
-        name = self.path.rsplit('/')[-2]
-        self.Zdata_fname = f'Z_factors/{name}.hd5'
+        self.Zdata_fname = f'Z_factors/{self.ens.dataname}.hd5'
 
         if self.compute:
+            self.mass_map, self.cf_list = self.ens.config_counter(
+                data='NPR', prefix=f'{scheme}_Bilinear', show=False)
+            self.N_cf = len(self.cf_list)
+            self.masses = sorted(list(self.mass_map.keys()))
             self.create_attributes()
+        else:
+            self.mass_map = {mass_str2float(mass_str): mass_str
+                             for mass_str in h5py.File(self.Zdata_fname, 'r')['Bilinear'].keys()}
+            self.masses = sorted(list(self.mass_map.keys()))
 
     def chiral_extrap(self, momvar_idx: int, subscheme: str,
                       plot: bool = False) -> Dict:
@@ -46,11 +51,6 @@ class Bilinear:
         return extrap
 
     def get_all_Zs(self, momvar_idx: int, subscheme: str) -> Dict:
-        if not self.compute:
-            mass_str = list(h5py.File(self.Zdata_fname, 'r')
-                            [f'{subscheme}/Bilinear'].keys())
-            self.mass_map = {mass_str2float(mass): mass for mass in mass_str}
-            self.masses = sorted(list(self.mass_map.keys()))
 
         Zs = {mass: self.get_Zs(mass, momvar_idx, subscheme)
               for mass in self.masses}
@@ -117,7 +117,7 @@ class Bilinear:
                    subscheme: str) -> Dict:
 
         file = h5py.File(self.Zdata_fname, 'a')
-        grp_name = f'{subscheme}/Bilinear/{self.mass_map[mass]}' +\
+        grp_name = f'Bilinear/{self.mass_map[mass]}/{subscheme}' +\
             f'/momvar_{momvar_idx+1}'
 
         grp = file[grp_name]
@@ -135,7 +135,7 @@ class Bilinear:
                    momvar_idx: int, subscheme: str) -> None:
 
         file = h5py.File(self.Zdata_fname, 'a')
-        grp_name = f'{subscheme}/Bilinear/{self.mass_map[mass]}' +\
+        grp_name = f'Bilinear/{self.mass_map[mass]}/{subscheme}' +\
             f'/momvar_{momvar_idx+1}'
 
         if grp_name in file.keys():
@@ -288,11 +288,7 @@ class Bilinear:
     def create_attributes(self) -> None:
         self.theta_str = {mass_str: {mom_str: self.get_bl_list(f'{self.path}/{mass_str}/{mom_str}')
                                      for mom_str in os.listdir(f'{self.path}/{mass_str}')}
-                          for mass_str in os.listdir(self.path)}
-
-        self.mass_map = {mass_str2float(
-            mass): mass for mass in self.theta_str.keys()}
-        self.masses = sorted(list(self.mass_map.keys()))
+                          for mass, mass_str in self.mass_map.items()}
 
         self.mom_map = {np.linalg.norm(convert_to_phys(theta[0][0],
                         self.ens.L, self.ens.T))*self.ens.ainv: mom_str
