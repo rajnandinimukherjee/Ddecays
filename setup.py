@@ -312,7 +312,7 @@ def fit_func(
     correlated=False,
     pause=False,
     chi_sq_rescale=False,
-    Nboot=100,
+    Nboot=Stat.N_boot,
     **kwargs,
 ):
 

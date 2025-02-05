@@ -22,6 +22,7 @@ class Ensemble:
             pars[name]["csw"]
         )
         self.datafolder = self.path+'new_runs/'+self.dataname
+        # self.datafolder = self.path+self.dataname
 
     def __repr__(self):
         return self.dataname
