@@ -20,82 +20,11 @@ dirs = ['X', 'Y', 'Z', 'T']
 N_dir = len(dirs)
 
 
-def bootstrap(data: np.ndarray, Nboot: int = 100, seed=1) -> np.ndarray:
-    """bootstrap samples generator -
-    if input data has same size as K,
-    assumes it's already a bootstrap sample
-    and does no further sampling"""
-
-    if type(seed) is str:
-        seed = int(hash(seed)) % (2**32)
-
-    C = data.shape[0]
-    if C == Nboot:  # goes off when data itself is bootstrap data
-        samples = data
-    else:
-        np.random.seed(seed)
-        slicing = np.random.randint(0, C, size=(C, Nboot))
-        samples = np.mean(
-            data[
-                tuple(slicing.T if ax == 0 else slice(None)
-                      for ax in range(data.ndim))
-            ],
-            axis=1,
-        )
-    return np.array(samples, dtype=data.dtype)
-
-
-def callPDF(filename: str, show: bool = True) -> None:
-    """ plots matplotlib graphics into pdfs, saves and shows"""
-
-    pdf = PdfPages(filename)
-    fig_nums = plt.get_fignums()
-    figs = [plt.figure(n) for n in fig_nums]
-    for fig in figs:
-        fig.savefig(pdf, format="pdf")
-    pdf.close()
-    plt.close("all")
-    if show:
-        os.system("open " + filename)
-
-
-def err_disp(num, err, n=2, sys_err=None, **kwargs):
-    """ converts num and err into num(err) in
-    scientific notation upto n digits in error """
-
-    if err == 0.0:
-        return str(np.around(num, 2))
-    else:
-        if type(sys_err) is not None:
-            err_size = max(
-                int(np.floor(np.log10(np.abs(err)))),
-                int(np.floor(np.log10(np.abs(sys_err)))),
-            )
-        else:
-            err_size = int(np.floor(np.log10(np.abs(err))))
-
-        num_size = int(np.floor(np.log10(np.abs(num))))
-        min_size = min(err_size, num_size + (n - 1))
-        err_n_digits = int(np.round(err * 10 ** (-(min_size - (n - 1)))))
-
-        if min_size > (n - 1):
-            disp_str = f"{num}({err})"
-        else:
-            disp_str = "{:.{m}f}".format(num, m=-(min_size - (n - 1)))
-            disp_str += f"({err_n_digits})"
-
-        if type(sys_err) is not None:
-            sys_err_n_digits = int(
-                np.round(sys_err * 10 ** (-(min_size - (n - 1)))))
-            disp_str += f"({sys_err_n_digits})"
-
-        return disp_str
-
-
 def st_dev(data, mean=None, **kwargs) -> np.ndarray:
     """standard deviation function - finds stdev
     around data mean or mean provided as input"""
 
+    data, mean = data.real, mean.real
     n = len(data)
     if mean is None:
         mean = np.mean(data)
@@ -107,7 +36,7 @@ class Stat:
     can interacts with scalars or other instances of
     the same class for basic mathematical operations """
 
-    N_boot = 100
+    N_boot = 1000
 
     def __init__(self, val, err=None, btsp=None,
                  dtype=None, seed=None, **kwargs):
@@ -131,9 +60,12 @@ class Stat:
         if type(btsp) is str:
             if btsp == "fill":
                 self.calc_btsp()
-            if btsp == "seed":
+            elif btsp == "seed":
                 seed = kwargs["seed"]
                 self.calc_btsp(seed=seed)
+            elif btsp == "constant":
+                self.btsp = np.repeat(
+                    self.val[np.newaxis, ...], self.N_boot, axis=0)
         elif type(btsp) is np.ndarray and self.btsp.shape[0] != self.N_boot:
             self.N_boot = self.btsp.shape[0]
 
@@ -258,12 +190,87 @@ class Stat:
         return new_stat
 
 
+Zero = Stat(val=0, err=0, btsp='fill')
+
+
 def join_stats(stats):
     return Stat(
         val=np.array([s.val for s in stats]),
         err=np.array([s.err for s in stats]),
         btsp=np.array([s.btsp for s in stats]).swapaxes(0, 1),
     )
+
+
+def bootstrap(data: np.ndarray, Nboot: int = Stat.N_boot, seed=1) -> np.ndarray:
+    """bootstrap samples generator -
+    if input data has same size as K,
+    assumes it's already a bootstrap sample
+    and does no further sampling"""
+
+    if type(seed) is str:
+        seed = int(hash(seed)) % (2**32)
+
+    C = data.shape[0]
+    if C == Nboot:  # goes off when data itself is bootstrap data
+        samples = data
+    else:
+        np.random.seed(seed)
+        slicing = np.random.randint(0, C, size=(C, Nboot))
+        samples = np.mean(
+            data[
+                tuple(slicing.T if ax == 0 else slice(None)
+                      for ax in range(data.ndim))
+            ],
+            axis=1,
+        )
+    return np.array(samples, dtype=data.dtype)
+
+
+def callPDF(filename: str, show: bool = True) -> None:
+    """ plots matplotlib graphics into pdfs, saves and shows"""
+
+    pdf = PdfPages(filename)
+    fig_nums = plt.get_fignums()
+    figs = [plt.figure(n) for n in fig_nums]
+    for fig in figs:
+        fig.savefig(pdf, format="pdf")
+    pdf.close()
+    plt.close("all")
+    if show:
+        os.system("open " + filename)
+
+
+def err_disp(num, err, n=2, sys_err=None, **kwargs):
+    """ converts num and err into num(err) in
+    scientific notation upto n digits in error """
+
+    if err == 0.0:
+        return str(np.around(num, 2))
+    else:
+        if type(sys_err) is not None:
+            err_size = max(
+                int(np.floor(np.log10(np.abs(err)))),
+                int(np.floor(np.log10(np.abs(sys_err)))),
+            )
+        else:
+            err_size = int(np.floor(np.log10(np.abs(err))))
+
+        num_size = int(np.floor(np.log10(np.abs(num))))
+        min_size = min(err_size, num_size + (n - 1))
+        err_n_digits = int(np.round(err * 10 ** (-(min_size - (n - 1)))))
+
+        if min_size > (n - 1):
+            disp_str = f"{num}({err})"
+        else:
+            disp_str = "{:.{m}f}".format(num, m=-(min_size - (n - 1)))
+            disp_str += f"({err_n_digits})"
+
+        if type(sys_err) is not None:
+            sys_err_n_digits = int(
+                np.round(sys_err * 10 ** (-(min_size - (n - 1)))))
+            disp_str += f"({sys_err_n_digits})"
+
+        return disp_str
 
 
 def COV(data, **kwargs):

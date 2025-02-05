@@ -106,7 +106,7 @@ class Bilinear:
 
         if plot:
             sublabel = r'\gamma_\mu' if subscheme == 'gamma' else r'\not{q}'
-            title = self.scheme+r'$^{'+sublabel+r'}$, $m_\pi=' +\
+            title = self.scheme+r'$^{'+sublabel+r'}$, $am_q=' +\
                 str(np.around(mass, 3))+r'$ mom combo '+str(momvar_idx+1)
             fname = f'plots/{self.ens.name}_Zs_{self.mass_map[mass]}_tw{momvar_idx}.pdf'
             self.plot_Z_bls(Zs, title, fname)
@@ -189,7 +189,7 @@ class Bilinear:
             mass, mom, theta_in, theta_out)
 
         if subscheme not in ['gamma', 'qslash']:
-            raise 'Need to pass in subscheme gamma or qslash (str)'
+            raise 'Subscheme is either gamma or qslash'
 
         mom_in = convert_to_phys(theta_in, self.ens.L, self.ens.T)
         mom_out = convert_to_phys(theta_out, self.ens.L, self.ens.T)
@@ -197,11 +197,10 @@ class Bilinear:
 
         projectors = bilinear_projectors(subscheme, qvec=qvec)
 
-        return {current: join_stats([Stattensordot(
-            projectors[current][idx], operators[current][idx]).use_func(tensortrace).use_func(np.real)
-            for idx in range(len(projectors[current]))]).use_func(np.sum, axis=0)
-            for current in projectors.keys()
-        }
+        return {current: sum([projectors[current][i]@operators[current][i]
+                              for i in range(len(operators[current]))], Zero).
+                use_func(np.trace).use_func(np.real)
+                for current in projectors.keys()}
 
     def load_bl_operators(self, mass: float, mom: float,
                           theta_in: np.ndarray, theta_out: np.ndarray) -> Dict:
@@ -222,13 +221,14 @@ class Bilinear:
                            theta_in: np.ndarray, theta_out: np.ndarray) -> np.ndarray:
 
         bilinears = self.load_bls(mass, mom, theta_in, theta_out)
+        in_prop = self.load_external_leg(mass, mom, theta_in)
+        out_prop = self.load_external_leg(mass, mom, theta_out)
+        out_prop_g5 = out_prop.use_func(g5)
 
-        mass_str, mom_str = self.mass_map[mass], self.mom_map[mom]
-        in_prop = load_external_leg(self.ens.name, mass_str, mom_str, theta_in)
-        out_prop = load_external_leg(
-            self.ens.name, mass_str, mom_str, theta_out)
+        in_prop_inv = in_prop.use_func(np.linalg.inv)
+        out_prop_inv = out_prop_g5.use_func(np.linalg.inv)
 
-        return np.array([bl_leg_ampute(bilinears[b], in_prop, out_prop)
+        return np.array([out_prop_inv@bilinears[b]@in_prop_inv
                          for b in range(len(TwoPointFn.vertices))])
 
     def load_bls(self, mass: float, mom: float,
@@ -242,8 +242,8 @@ class Bilinear:
                  f'/{self.prefix}{theta_in_str}_{theta_out_str}.{cf}.h5'
                  for cf in self.cf_list]
 
-        data = np.empty(shape=(self.N_cf, len(TwoPointFn.vertices), N_dir,
-                               N_dir, N_col, N_col), dtype='complex128')
+        data = np.empty(shape=(self.N_cf, len(TwoPointFn.vertices),
+                               N_cd, N_cd), dtype='complex128')
 
         for cf in range(self.N_cf):
             try:
@@ -253,15 +253,48 @@ class Bilinear:
                 pdb.set_trace()
             for vx in range(len(TwoPointFn.vertices)):
                 corr = file[f'Bilinear_{vx}']['corr'][0, 0, :]
-                data[cf, vx] = np.array(corr["re"]+1j*corr["im"])
+
+                data[cf, vx] = np.array(
+                    corr["re"]+1j*corr["im"]).swapaxes(1, 2).reshape(
+                    (N_cd, N_cd), order='F')
 
         bilinears = np.array([Stat(
             val=np.mean(data[:, b_idx], axis=0),
-            err='fill',
-            btsp=bootstrap(data[:, b_idx], seed=self.ens.name)
+            btsp=bootstrap(data[:, b_idx], seed=self.ens.seed)
         ) for b_idx in range(len(TwoPointFn.vertices))], dtype=object)
 
         return bilinears
+
+    def load_external_leg(self, mass: float, mom: float,
+                          theta: np.ndarray) -> Stat:
+        """ Given theta, reads in data for external leg"""
+
+        prefix = 'ExternalLeg_0_'
+        theta_str = '_'.join(theta)
+
+        files = [f'{self.path}/{self.mass_map[mass]}/{self.mom_map[mom]}' +
+                 f'/{prefix}{theta_str}.{cf}.h5' for cf in self.cf_list]
+
+        data = np.empty(
+            shape=(self.N_cf, N_cd, N_cd), dtype='complex128')
+
+        for cf in range(self.N_cf):
+            try:
+                corr = h5py.File(files[cf], 'r')[
+                    'ExternalLeg']['corr'][0, 0, :]
+            except OSError:
+                print(fname)
+                pdb.set_trace()
+
+            data[cf] = np.array(corr["re"]+1j*corr["im"]).swapaxes(1, 2).reshape(
+                (N_cd, N_cd), order='F')
+
+        externalleg = Stat(
+            val=np.mean(data, axis=0),
+            btsp=bootstrap(data, seed=self.ens.seed)
+        )
+
+        return externalleg
 
     def get_bl_list(self, path: str) -> np.ndarray:
         # get the list of bilinear momentum combinations
@@ -273,7 +306,7 @@ class Bilinear:
             if [mom1, mom2] in mom_combinations:
                 continue
             else:
-                partial_str = f'{self.prefix}' +\
+                partial_str = f'{self.prefix}' + \
                     '_'.join(mom1)+'_'+'_'.join(mom2)
                 other_configs = [
                     f for f in all_files if f.startswith(partial_str)]
@@ -291,7 +324,7 @@ class Bilinear:
                           for mass, mass_str in self.mass_map.items()}
 
         self.mom_map = {np.linalg.norm(convert_to_phys(theta[0][0],
-                        self.ens.L, self.ens.T))*self.ens.ainv: mom_str
+                                                       self.ens.L, self.ens.T))*self.ens.ainv: mom_str
                         for mom_str, theta in self.theta_str[self.mass_map[self.masses[0]]].items()}
         self.momenta = sorted(list(self.mom_map.keys()))
 
@@ -304,44 +337,6 @@ def convert_to_phys(vec: np.ndarray, L: int, T: int) -> np.ndarray:
     vec = np.array(list(map(float, vec)))
     L, T = L/(2*np.pi), T/(2*np.pi)
     return np.array(list(vec[:3]/L)+[vec[-1]/T])
-
-
-def load_external_leg(ensemble: str, mass_str: str, mom_str: str,
-                      theta: np.ndarray) -> Stat:
-    """ Given theta, reads in data for external leg"""
-
-    ens = Ensemble(ensemble)
-    prefix = 'ExternalLeg_0_'
-    path = ens.datafolder+'/npr_data'
-    theta_str = '_'.join(theta)
-    cf_list = pars[ensemble]['NPR_cfgs']
-    N_cf = len(cf_list)
-
-    data = np.empty(
-        shape=(N_cf, N_dir, N_dir, N_col, N_col), dtype='complex128')
-
-    for cf in range(N_cf):
-        fname = f'{path}/{mass_str}/{mom_str}/{prefix}{theta_str}.{cf_list[cf]}.h5'
-        try:
-            corr = h5py.File(fname, 'r')['ExternalLeg']['corr'][0, 0, :]
-        except OSError:
-            print(fname)
-            pdb.set_trace()
-        data[cf] = np.array(corr["re"]+1j*corr["im"])
-
-    return Stat(
-        val=np.mean(data, axis=0),
-        err='fill',
-        btsp=bootstrap(data, seed=ens.name)
-    )
-
-
-def bl_leg_ampute(bilinear: Stat, in_prop: Stat, out_prop: Stat) -> Stat:
-    in_prop_inv = in_prop.use_func(tensorinv)
-    out_prop_G5_conj = out_prop.use_func(G5H)
-    out_prop_inv = out_prop_G5_conj.use_func(tensorinv)
-
-    return Stattensordot(out_prop_inv, Stattensordot(bilinear, in_prop_inv))
 
 
 def decode_bl_fname(fname: str) -> Tuple[int, List, List]:

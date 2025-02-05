@@ -23,6 +23,9 @@ class Ensemble:
         )
         self.datafolder = self.path+'new_runs/'+self.dataname
 
+    def __repr__(self):
+        return self.dataname
+
     def config_counter(self, data: str, prefix: str,
                        show: bool = True) -> Tuple[Dict, List]:
 

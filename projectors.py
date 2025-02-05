@@ -1,6 +1,6 @@
 from setup import *
 
-N_cN_d = N_col*N_dir
+N_cd = N_col*N_dir
 
 gamma = {
     "I": np.identity(N_dir, dtype="complex128"),
@@ -25,109 +25,39 @@ Gamma = {
 }
 
 
-def tensordot(A: np.ndarray, B: np.ndarray) -> np.ndarray:
-    """ matrix multiplication of (N_dir,N_dir,N_col,N_col) data
-    to contract spacetime and colour indices; equivalent to
-    np.einsum('abcd,bedf->aecf', A, B)
-    """
-    return np.tensordot(A, B, axes=([1, 3], [0, 2])).transpose(0, 2, 1, 3)
-
-
-def doubletensordot(A: np.ndarray, B: np.ndarray) -> np.ndarray:
-    """ matrix multiplication of (N_dir,N_dir,N_col,N_col,N_dir,N_dir,N_col,N_col)
-    data to contract spacetime and colour indices; equivalent to
-    np.einsum('abcdefgh,bidjfkhl-> aicjekgl', A, B)
-    """
-    return np.tensordot(A, B, axes=([1, 3, 5, 7], [0, 2, 4, 6])).transpose(
-        0, 4, 1, 5, 2, 6, 3, 7)
-
-
-def Stattensordot(A, B) -> Stat:
-    """ tensordot method under the bootstrap """
-    if type(A) is not Stat:
-        A = Stat(
-            val=A,
-            err=np.zeros(shape=A.shape),
-            btsp='fill'
-        )
-    if type(B) is not Stat:
-        B = Stat(
-            val=B,
-            err=np.zeros(shape=B.shape),
-            btsp='fill'
-        )
-    return Stat(
-        val=tensordot(A.val, B.val),
-        err='fill',
-            btsp=np.array([tensordot(A.btsp[k], B.btsp[k])
-                           for k in range(A.btsp.shape[0])])
-    )
-
-
-def tensortrace(A: np.ndarray) -> np.ndarray:
-    """ trace of (N_dir,N_dir,N_col,N_col) data
-    over spacetime and colour indices
-    """
-    return np.trace(A.swapaxes(1, 2).reshape(
-        N_cN_d, N_cN_d))
-
-
-def doubletensortrace(A: np.ndarray) -> np.ndarray:
-    """ trace of (N_dir,N_dir,N_col,N_col,N_dir,N_dir,N_col,N_col)
-    data over spacetime and colour indices
-    """
-    return np.trace(A.swapaxes(1, 2).swapaxes(5, 6).reshape(
-        N_cN_d, N_cN_d, N_cN_d, N_cN_d).reshape(N_cN_d**2, N_cN_d**2))
-
-
-def tensorinv(A: np.ndarray) -> np.ndarray:
-    """ inverse of (N_dir,N_dir,N_col,N_col) data """
-    return np.linalg.inv(A.swapaxes(1, 2).reshape((
-        N_cN_d, N_cN_d), order='F')).reshape(
-        (4, 3, 4, 3), order='F').swapaxes(2, 1)
-
-
-def tensorhermitian(A: np.ndarray) -> np.ndarray:
-    """ hermitian conjugate of (N_dir,N_dir,N_col,N_col) data """
-    return (np.conj(A.swapaxes(1, 2).reshape(
-        (N_cN_d, N_cN_d), order='F')).T).reshape(
-        (4, 3, 4, 3), order='F').swapaxes(2, 1)
-
-
-def G5H(A: np.ndarray) -> np.ndarray:
-    """ gamma5 hermitian conj of (N_dir,N_dir,N_col,N_col) data """
-    return tensordot(Gamma['5'], tensordot(tensorhermitian(A), Gamma['5']))
+def g5(prop: np.ndarray) -> np.ndarray:
+    gamma5 = Gamma['5'].swapaxes(1, 2).reshape((N_cd, N_cd), order='F')
+    return gamma5@prop.conj().T@gamma5
 
 
 def bilinear_projectors(subscheme: str, qvec: np.ndarray) -> Dict:
-    if subscheme == 'gamma':
-        sGamma = {i: Gamma[i] for i in dirs}
-
-    elif subscheme == 'qslash':
-        if type(qvec) is not np.ndarray:
-            raise 'Need vector q (np.ndarray) for qslash scheme'
-        qslash = np.sum([qvec[i] * Gamma[dirs[i]]
-                         for i in range(N_dir)], axis=0)
-        qsq = qvec.dot(qvec)
-
-        # replace \gamma_\mu with \slashed{q}q_\mu/q^2
-        sGamma = {dirs[i]: qslash*qvec[i]/qsq for i in range(N_dir)}
-
-    else:
+    if subscheme not in ['gamma', 'qslash']:
         raise 'subscheme input is either gamma or qslash (str)'
 
+    myGamma = {label: mtx.swapaxes(1, 2).reshape((N_cd, N_cd), order='F')
+               for label, mtx in Gamma.items()}
+
+    if subscheme == 'qslash':
+        qslash = np.sum([qvec[i] * myGamma[dirs[i]]
+                         for i in range(N_dir)], axis=0)
+        qsq = qvec.dot(qvec)
+        # replace \gamma_\mu with \slashed{q}q_\mu/q^2
+        for i in range(N_dir):
+            myGamma[dirs[i]] = qslash*qvec[i]/qsq
+
     projectors = {
-        "S": [Gamma["I"]],
-        "P": [Gamma["5"]],
-        "V": [sGamma[i] for i in dirs],
-        "A": [tensordot(sGamma[i], Gamma["5"]) for i in dirs],
-        "T": sum([[tensordot(sGamma[dirs[i]], sGamma[dirs[j]])
+        "S": [myGamma["I"]],
+        "P": [myGamma["5"]],
+        "V": [myGamma[i] for i in dirs],
+        "A": [myGamma[i]@myGamma["5"] for i in dirs],
+        "T": sum([[myGamma[dirs[i]]@myGamma[dirs[j]]
                    for j in range(i+1, N_dir)]
                   for i in range(0, N_dir-1)], [],)}
-    tree_values = {curr: np.sum([tensortrace(tensordot(mtx, mtx))
-                                 for mtx in proj], axis=0)
+
+    tree_values = {curr: np.sum([np.trace(mtx@mtx) for mtx in proj], axis=0)
                    for curr, proj in projectors.items()}
-    return {curr: [mtx/tree_values[curr] for mtx in proj]
+
+    return {curr: [Stat(val=mtx/tree_values[curr], btsp='constant') for mtx in proj]
             for curr, proj in projectors.items()}
 
 
