@@ -70,5 +70,5 @@ class Ensemble:
 
 def mass_str2float(mass: str) -> float:
     mass = mass.rsplit('_')[0]
-    mass = mass.replace('m', '-').replace('p', '.').replace('n', '')
+    mass = mass.replace('m', '').replace('p', '.').replace('n', '-')
     return float(mass)

@@ -28,7 +28,15 @@ class Bilinear:
 
     def chiral_extrap(self, momvar_idx: int, subscheme: str,
                       plot: bool = False) -> Dict:
-        Zs = self.get_all_Zs(momvar_idx, subscheme)
+        Zs = self.get_all_Zs(momvar_idx, subscheme, plot=False)
+        self.pion = TwoPointFn(self.ens.name, compute=False)
+        if np.all(self.masses == self.pion.masses):
+            self.pion_masses = join_stats(self.pion.load_meson_masses())
+        else:
+            print(
+                f"mismatch between NPR masses {self.masses} and \nvalence masses {self.pion.masses}")
+            return None
+
         extrap = {}
 
         for c_idx, current in enumerate(self.currents):
@@ -36,7 +44,7 @@ class Bilinear:
             for m_idx, mom in enumerate(self.momenta):
                 ys = join_stats([Zs[mass][current][m_idx]
                                  for mass in self.masses])
-                res = fit_func(self.masses, ys, chiral_ansatz,
+                res = fit_func(self.pion_masses, ys, chiral_ansatz,
                                [1, 1], correlated=True)
                 extrap[current].append(res[0])
             extrap[current] = join_stats(extrap[current])
@@ -50,33 +58,35 @@ class Bilinear:
 
         return extrap
 
-    def get_all_Zs(self, momvar_idx: int, subscheme: str) -> Dict:
+    def get_all_Zs(self, momvar_idx: int, subscheme: str,
+                   plot: bool = True) -> Dict:
 
         Zs = {mass: self.get_Zs(mass, momvar_idx, subscheme)
               for mass in self.masses}
 
-        fig, ax = plt.subplots(nrows=len(self.currents),
-                               ncols=1, figsize=(3, 10))
-        plt.subplots_adjust(hspace=0)
-        sublabel = r'\gamma_\mu' if subscheme == 'gamma' else r'\not{q}'
-        title = self.scheme+r'$^{'+sublabel + \
-            r'}$, mom combo '+str(momvar_idx+1)
-        ax[0].set_title(title)
+        if plot:
+            fig, ax = plt.subplots(nrows=len(self.currents),
+                                   ncols=1, figsize=(3, 10))
+            plt.subplots_adjust(hspace=0)
+            sublabel = r'\gamma_\mu' if subscheme == 'gamma' else r'\not{q}'
+            title = self.scheme+r'$^{'+sublabel + \
+                r'}$, mom combo '+str(momvar_idx+1)
+            ax[0].set_title(title)
 
-        for c_idx, current in enumerate(self.currents):
-            for m_idx, mass in enumerate(self.masses):
-                ax[c_idx].errorbar(self.momenta, Zs[mass][current].val,
-                                   yerr=Zs[mass][current].err, fmt='o',
-                                   capsize=4, label=f'{np.around(mass, 3)}')
-            ax[c_idx].set_ylabel(r'$Z_'+current+r'/Z_q$')
+            for c_idx, current in enumerate(self.currents):
+                for m_idx, mass in enumerate(self.masses):
+                    ax[c_idx].errorbar(self.momenta, Zs[mass][current].val,
+                                       yerr=Zs[mass][current].err, fmt='o',
+                                       capsize=4, label=f'{np.around(mass, 3)}')
+                ax[c_idx].set_ylabel(r'$Z_'+current+r'/Z_q$')
 
-        ax[-1].set_xlabel(r'$\sqrt{q^2}$ [GeV]')
-        handles, labels = ax[-1].get_legend_handles_labels()
-        fig.legend(handles, labels, loc='center right')
+            ax[-1].set_xlabel(r'$\sqrt{q^2}$ [GeV]')
+            handles, labels = ax[-1].get_legend_handles_labels()
+            fig.legend(handles, labels, loc='center right')
 
-        fname = f'plots/{self.ens.name}_Zs_all_masses_tw{momvar_idx}.pdf'
-        callPDF(fname, show=False)
-        print(f'plotted to {os.getcwd()}/{fname}')
+            fname = f'plots/{self.ens.name}_Zs_all_masses_tw{momvar_idx}.pdf'
+            callPDF(fname, show=False)
+            print(f'plotted to {os.getcwd()}/{fname}')
 
         return Zs
 

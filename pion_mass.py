@@ -43,22 +43,32 @@ class TwoPointFn:
                 err=np.array(file[grp_name+'/errors']),
                 btsp=np.array(file[grp_name+'/bootstrap']),
             )
+            mpi.chi_sq = file[grp_name].attrs['chi_sq']
+            mpi.DOF = file[grp_name].attrs['DOF']
             mesons.append(mpi)
 
         if plot:
-            if 'ax' not in kwargs:
-                fig, ax = plt.subplots()
-            x = -np.array(self.masses)
+            x = np.array(self.masses)
             y = join_stats(mesons)**2
-            ax.errorbar(x, y.val, yerr=y.err,
-                        capsize=4, fmt='o')
-            ax.set_xlabel(r'$am_q$')
-            ax.set_ylabel(r'$m_\pi^2$ [GeV${}^2$]')
-
             if 'ax' not in kwargs:
+                fig, ax = plt.subplots(nrows=2, ncols=1, sharex=True,
+                                       gridspec_kw={"height_ratios": [3, 1]})
+                plt.subplots_adjust(hspace=0)
+
+                ax[0].errorbar(x, y.val, yerr=y.err,
+                               capsize=4, fmt='o')
+                ax[0].set_ylabel(r'$m_\pi^2$ [GeV${}^2$]')
+
+                chis = [mpi.chi_sq/mpi.DOF for mpi in mesons]
+                ax[1].scatter(x, chis, marker='x')
+                ax[1].set_ylabel(r'$\chi^2/\mathrm{DOF}$')
+                ax[1].set_xlabel(r'$am_q$')
                 fname = f'plots/{self.ens.name}_mpi_variation.pdf'
                 callPDF(fname, show=False)
                 print(f'plot saved to {fname}')
+            else:
+                ax.errorbar(x, y.val, yerr=y.err,
+                            capsize=4, fmt='o')
 
         return mesons
 
