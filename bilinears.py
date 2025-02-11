@@ -10,7 +10,7 @@ class Bilinear:
         self.ens = Ensemble(ensemble)
         self.scheme = scheme
         self.prefix = f'{scheme}_Bilinear_00_'
-        self.path = self.ens.datafolder+'/npr_data'
+        self.path = f'{self.ens.path}/new_runs/{self.ens.dataname}/npr_data'
         self.compute = compute
 
         self.Zdata_fname = f'Z_factors/{self.ens.dataname}.hd5'
@@ -26,8 +26,59 @@ class Bilinear:
                              for mass_str in h5py.File(self.Zdata_fname, 'r')['Bilinear'].keys()}
             self.masses = sorted(list(self.mass_map.keys()))
 
+    def plot_chiral_extrap_allmom(self, subscheme: str) -> None:
+        fig, ax = plt.subplots(nrows=len(self.currents),
+                               ncols=1, figsize=(3, 10))
+        plt.subplots_adjust(hspace=0)
+        sublabel = r'\gamma_\mu' if subscheme == 'gamma' else r'\not{q}'
+        title = self.scheme+r'$^{'+sublabel + \
+            r'}$, $m_\pi=0$, all combos'
+        ax[0].set_title(title)
+
+        for momvar_idx in range(3):
+            Zs = self.load_chiral_extrap(momvar_idx, subscheme, plot=False)
+            for c_idx, current in enumerate(self.currents):
+                ax[c_idx].errorbar(self.momenta, Zs[current].val,
+                                   yerr=Zs[current].err, fmt='o',
+                                   capsize=4, label=mom_combos[momvar_idx])
+                if momvar_idx == 0:
+                    ax[c_idx].set_ylabel(r'$Z_'+current+r'/Z_q$')
+
+        ax[-1].set_xlabel(r'$\sqrt{q^2}$ [GeV]')
+        handles, labels = ax[-1].get_legend_handles_labels()
+        fig.legend(handles, labels, loc='center right')
+
+        fname = f'plots/{self.ens.name}_Zs_chiral_extrap_all_tw.pdf'
+        callPDF(fname, show=False)
+        print(f'plotted to {os.getcwd()}/{fname}')
+
+    def load_chiral_extrap(self, momvar_idx: int, subscheme: str,
+                           plot: bool = False) -> Dict:
+
+        file = h5py.File(self.Zdata_fname, 'r')
+        grp_name = f'Bilinear/chiral_extrap/{subscheme}' +\
+            f'/momvar_{momvar_idx+1}'
+        grp = file[grp_name]
+
+        extrap = {current: Stat(
+            val=np.array(grp[f'{current}/central'][:]),
+            err=np.array(grp[f'{current}/errors'][:]),
+            btsp=np.array(grp[f'{current}/bootstrap'][:])
+        ) for current in self.currents}
+
+        if plot:
+            sublabel = r'\gamma_\mu' if subscheme == 'gamma' else r'\not{q}'
+            title = self.scheme+r'$^{'+sublabel + \
+                r'}$, $m_\pi=0$ mom combo '+str(momvar_idx+1)
+            fname = f'plots/{self.ens.name}_Zs_chiral_extrap_tw{momvar_idx}.pdf'
+            self.plot_Z_bls(extrap, title, fname)
+
+        return extrap
+
     def chiral_extrap(self, momvar_idx: int, subscheme: str,
-                      plot: bool = False) -> Dict:
+                      plot: bool = False, save: bool = True) -> Dict:
+
+        self.compute = False
         Zs = self.get_all_Zs(momvar_idx, subscheme, plot=False)
         self.pion = TwoPointFn(self.ens.name, compute=False)
         if np.all(self.masses == self.pion.masses):
@@ -41,13 +92,37 @@ class Bilinear:
 
         for c_idx, current in enumerate(self.currents):
             extrap[current] = []
-            for m_idx, mom in enumerate(self.momenta):
+            for m_idx in tqdm(range(len(self.momenta)),
+                              leave=False, desc=current):
+                mom = self.momenta[m_idx]
                 ys = join_stats([Zs[mass][current][m_idx]
                                  for mass in self.masses])
                 res = fit_func(self.pion_masses, ys, chiral_ansatz,
                                [1, 1], correlated=True)
                 extrap[current].append(res[0])
             extrap[current] = join_stats(extrap[current])
+
+        if save:
+            file = h5py.File(self.Zdata_fname, 'a')
+            grp_name = f'Bilinear/chiral_extrap/{subscheme}' +\
+                f'/momvar_{momvar_idx+1}'
+
+            if grp_name in file.keys():
+                del file[grp_name]
+
+            grp = file.create_group(grp_name)
+            grp.attrs['momentum_variation'] = mom_combos[momvar_idx]
+
+            grp.create_dataset('ap', data=np.array(self.momenta)/self.ens.ainv)
+            for current in self.currents:
+                grp.create_dataset(f'{current}/central',
+                                   data=extrap[current].val)
+                grp.create_dataset(f'{current}/errors',
+                                   data=extrap[current].err)
+                grp.create_dataset(f'{current}/bootstrap',
+                                   data=extrap[current].btsp)
+
+            print(f'saved data to {grp_name} in {self.Zdata_fname}')
 
         if plot:
             sublabel = r'\gamma_\mu' if subscheme == 'gamma' else r'\not{q}'
@@ -326,7 +401,7 @@ class Bilinear:
                     print(f'only {len(other_configs)} config files' +
                           f' found for ({mom1}, {mom2}) in {path}\n')
 
-        return mom_combinations
+        return mom_combo_sort(np.array(mom_combinations))
 
     def create_attributes(self) -> None:
         self.theta_str = {mass_str: {mom_str: self.get_bl_list(f'{self.path}/{mass_str}/{mom_str}')
@@ -366,11 +441,14 @@ def mom_combo_sort(arr: np.ndarray) -> np.ndarray:
          [A,A,A,A], [0,0,0,B],
          [A,A,A,A], [B,B,B,B]]
     """
-    new_arr = np.empty(shape=arr.shape)
+    new_arr = np.empty(shape=arr.shape, dtype=arr.dtype)
     for i in range(3):
-        A, B = arr[i, 0], arr[i, 1]
-        if np.all(A != 0):
-            idx = 1 if np.count_nonzero(B) == 1 else 2
+        A, B = arr[i, 0, :], arr[i, 1, :]
+        if np.all(A != '0.0'):
+            if np.all(B[:3] == '0.0'):
+                idx = 1
+            else:
+                idx = 2
         else:
             idx = 0
         new_arr[idx, 0], new_arr[idx, 1] = A, B

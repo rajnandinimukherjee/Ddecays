@@ -3,7 +3,7 @@ from ensemble_parameters import parameters as pars
 
 
 class Ensemble:
-    path = '/home/dp207/dp207/shared/projects/hadronic_D_decays/NPR/'
+    path = '/home/dp207/dp207/shared/projects/hadronic_D_decays/NPR'
 
     def __init__(self, name: str) -> None:
         self.name = name
@@ -21,8 +21,6 @@ class Ensemble:
             pars[name]["kappa"],
             pars[name]["csw"]
         )
-        self.datafolder = self.path+'new_runs/'+self.dataname
-        # self.datafolder = self.path+self.dataname
 
     def __repr__(self):
         return self.dataname
@@ -32,11 +30,10 @@ class Ensemble:
 
         cfgs = {}
 
-        name = self.datafolder.rsplit('/')[-1]
         if data == 'valence':
-            path = self.path+f'hadronic_ward_identity/{name}/s0g0'
+            path = f'{self.path}/hadronic_ward_identity/{self.dataname}/s0g0'
         elif data == 'NPR':
-            path = self.datafolder+'/npr_data'
+            path = f'{self.path}/new_runs/{self.dataname}/npr_data'
         else:
             print('data is either valence or NPR')
 

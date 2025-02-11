@@ -17,7 +17,7 @@ class TwoPointFn:
                 "See TwoPointFn.vertices for accepted str formats."
 
         self.path = self.ens.path + \
-            f'hadronic_ward_identity/{self.ens.dataname}/s0g0'
+            f'/hadronic_ward_identity/{self.ens.dataname}/s0g0'
 
         self.Zdata_fname = f'Z_factors/{self.ens.dataname}.hd5'
 
@@ -77,7 +77,7 @@ class TwoPointFn:
                   plotrange=None, save: bool = True) -> Stat:
 
         if self.compute:
-            data, twopf = self.load_meson(mass, save=False)
+            data, twopf = self.load_meson(mass, save=save)
         else:
             twopf = self.read_meson(mass)
 
@@ -195,7 +195,7 @@ class TwoPointFn:
         twopf = Stat(
             val=np.mean(data, axis=0),
             err='fill',
-            btsp=bootstrap(data, seed=self.ens.name+'V'),
+            btsp=bootstrap(data, seed=self.ens.name),
         )
 
         # fold
