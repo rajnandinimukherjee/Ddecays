@@ -34,6 +34,7 @@ class Ensemble:
             path = f'{self.path}/hadronic_ward_identity/{self.dataname}/s0g0'
         elif data == 'NPR':
             path = f'{self.path}/new_runs/{self.dataname}/npr_data'
+            # path = f'{self.path}/{self.dataname}/npr_data'
         else:
             print('data is either valence or NPR')
 

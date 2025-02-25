@@ -105,7 +105,7 @@ class TwoPointFn:
                             alpha=0.1, label=r'$m_\pi$ fit')
             ax.set_xlabel(r'$t/a$')
             ax.set_ylabel(r'$m_\mathrm{eff}^\mathrm{'+ansatz+r'}$ [GeV]')
-            ax.set_title(r'$am_q=-'+str(np.around(mass, 3))+r'$')
+            ax.set_title(r'$am_q='+str(np.around(mass, 3))+r'$')
             ax.legend()
             ax.text(0.5, 0.1, r'$\chi^2/$DOF$=' +
                     str(np.around(res.chi_sq/res.DOF, 3))+r'$',
