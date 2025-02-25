@@ -247,7 +247,7 @@ def err_disp(num, err, n=2, sys_err=None, **kwargs):
     if err == 0.0:
         return str(np.around(num, 2))
     else:
-        if type(sys_err) is not None:
+        if sys_err != None:
             err_size = max(
                 int(np.floor(np.log10(np.abs(err)))),
                 int(np.floor(np.log10(np.abs(sys_err)))),
@@ -265,7 +265,7 @@ def err_disp(num, err, n=2, sys_err=None, **kwargs):
             disp_str = "{:.{m}f}".format(num, m=-(min_size - (n - 1)))
             disp_str += f"({err_n_digits})"
 
-        if type(sys_err) is not None:
+        if sys_err != None:
             sys_err_n_digits = int(
                 np.round(sys_err * 10 ** (-(min_size - (n - 1)))))
             disp_str += f"({sys_err_n_digits})"

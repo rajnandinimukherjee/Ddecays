@@ -23,7 +23,8 @@ class Bilinear:
             self.create_attributes()
         else:
             self.mass_map = {mass_str2float(mass_str): mass_str
-                             for mass_str in h5py.File(self.Zdata_fname, 'r')['Bilinear'].keys()}
+                             for mass_str in h5py.File(self.Zdata_fname, 'r')
+                             ['Bilinear'].keys() if mass_str != 'm0p0'}
             self.masses = sorted(list(self.mass_map.keys()))
 
     def plot_chiral_extrap_allmom(self, subscheme: str) -> None:
@@ -55,8 +56,13 @@ class Bilinear:
     def load_chiral_extrap(self, momvar_idx: int, subscheme: str,
                            plot: bool = False) -> Dict:
 
+        self.compute = False
+        Zs = self.get_all_Zs(momvar_idx, subscheme, plot=False)
+        self.pion = TwoPointFn(self.ens.name, compute=False)
+        self.pion_masses = join_stats(self.pion.load_meson_masses())
+
         file = h5py.File(self.Zdata_fname, 'r')
-        grp_name = f'Bilinear/chiral_extrap/{subscheme}' +\
+        grp_name = f'Bilinear/m0p0/{subscheme}' +\
             f'/momvar_{momvar_idx+1}'
         grp = file[grp_name]
 
@@ -65,15 +71,64 @@ class Bilinear:
             err=np.array(grp[f'{current}/errors'][:]),
             btsp=np.array(grp[f'{current}/bootstrap'][:])
         ) for current in self.currents}
+        file.close()
 
         if plot:
+            fig, ax = plt.subplots(nrows=len(self.currents),
+                                   ncols=1, figsize=(3, 10))
+            plt.subplots_adjust(hspace=0)
             sublabel = r'\gamma_\mu' if subscheme == 'gamma' else r'\not{q}'
+            title = self.scheme+r'$^{'+sublabel + \
+                r'}$, mom combo '+str(momvar_idx+1)
+            ax[0].set_title(title)
+
+            for c_idx, current in enumerate(self.currents):
+                for m_idx, mass in enumerate(self.masses):
+                    pion_label = err_disp(self.pion_masses.val[m_idx],
+                                          self.pion_masses.err[m_idx])
+                    ax[c_idx].errorbar(self.momenta, Zs[mass][current].val,
+                                       yerr=Zs[mass][current].err, fmt='o',
+                                       capsize=4, label='$m_\pi='+pion_label+'$')
+                ax[c_idx].set_ylabel(r'$Z_'+current+r'/Z_q$')
+                ax[c_idx].errorbar(self.momenta, extrap[current].val,
+                                   yerr=extrap[current].err, fmt='o',
+                                   capsize=4, label=f'extrap', c='k')
+
+            ax[-1].set_xlabel(r'$\sqrt{q^2}$ [GeV]')
+            handles, labels = ax[-1].get_legend_handles_labels()
+            fig.legend(handles, labels, loc='center right')
             title = self.scheme+r'$^{'+sublabel + \
                 r'}$, $m_\pi=0$ mom combo '+str(momvar_idx+1)
             fname = f'plots/{self.ens.name}_Zs_chiral_extrap_tw{momvar_idx}.pdf'
-            self.plot_Z_bls(extrap, title, fname)
+            callPDF(fname, show=False)
+            print(f'plotted to {os.getcwd()}/{fname}')
 
         return extrap
+
+    def quick_chiral_plot(self, mpis: Stat, Zs: Stat,
+                          res: Stat, title: str) -> None:
+
+        fig, ax = plt.subplots()
+        x = mpis**2
+        ax.errorbar(x.val, Zs.val, xerr=x.err, yerr=Zs.err,
+                    fmt='o', capsize=4, label=r'$Z(am_q)$')
+        ax.errorbar([0.0], [res.val[0]], yerr=[res.err[0]],
+                    fmt='o', capsize=4, label=r'$Z(am_q=0)$')
+        ax.axvline(0, color='k', ls='dashed')
+        xmin, xmax = ax.get_xlim()
+        xrange = np.linspace(-0.05, mpis.val[-1], 50)
+        yrange = res.mapping(xrange)
+        ax.fill_between(xrange**2, yrange.val+yrange.err,
+                        yrange.val-yrange.err, color='k',
+                        alpha=0.2, label=r'fit')
+        ax.text(0.5, 0.1, r'$\chi^2/$DOF$=' +
+                str(np.around(res.chi_sq/res.DOF, 3))+r'$',
+                va='center', ha='center', transform=ax.transAxes)
+        ax.set_xlim([xmin, xmax])
+        ax.set_xlabel(r'$m_\pi^2$ [GeV${}^2$]')
+        ax.set_ylabel(r'$Z_\Gamma/Z_q$')
+        ax.set_title(title)
+        ax.legend()
 
     def chiral_extrap(self, momvar_idx: int, subscheme: str,
                       plot: bool = False, save: bool = True) -> Dict:
@@ -81,6 +136,7 @@ class Bilinear:
         self.compute = False
         Zs = self.get_all_Zs(momvar_idx, subscheme, plot=False)
         self.pion = TwoPointFn(self.ens.name, compute=False)
+
         if np.all(self.masses == self.pion.masses):
             self.pion_masses = join_stats(self.pion.load_meson_masses())
         else:
@@ -98,13 +154,20 @@ class Bilinear:
                 ys = join_stats([Zs[mass][current][m_idx]
                                  for mass in self.masses])
                 res = fit_func(self.pion_masses, ys, chiral_ansatz,
-                               [1, 1], correlated=True)
+                               [1, 1], correlated=False)
+                if current in ['V', 'A'] and m_idx < 5 and plot:
+                    self.quick_chiral_plot(
+                        self.pion_masses,
+                        ys, res,
+                        r'chiral extrap $\mu='+str(np.around(mom, 3)) +
+                        r'$, $\Gamma=$'+current
+                    )
                 extrap[current].append(res[0])
             extrap[current] = join_stats(extrap[current])
 
         if save:
             file = h5py.File(self.Zdata_fname, 'a')
-            grp_name = f'Bilinear/chiral_extrap/{subscheme}' +\
+            grp_name = f'Bilinear/m0p0/{subscheme}' +\
                 f'/momvar_{momvar_idx+1}'
 
             if grp_name in file.keys():
@@ -130,7 +193,6 @@ class Bilinear:
                 r'}$, $m_\pi=0$ mom combo '+str(momvar_idx+1)
             fname = f'plots/{self.ens.name}_Zs_chiral_extrap_tw{momvar_idx}.pdf'
             self.plot_Z_bls(extrap, title, fname)
-
         return extrap
 
     def get_all_Zs(self, momvar_idx: int, subscheme: str,
