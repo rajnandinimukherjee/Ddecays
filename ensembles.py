@@ -45,8 +45,8 @@ class Ensemble:
             if data == 'valence':
                 folder = f'{path}/{mass_map[mass]}/mesons/'
             else:
-                mom_folder = os.listdir(f'{path}/{mass_map[mass]}/')[0]
-                folder = f'{path}/{mass_map[mass]}/{mom_folder}/'
+                momenta = os.listdir(f'{path}/{mass_map[mass]}/')
+                folder = f'{path}/{mass_map[mass]}/{momenta[0]}'
 
             vals = sorted(map(int, list(set([f.rsplit('.')[-2] for f in os.listdir(folder)
                                             if f.startswith(prefix)]))))
@@ -58,6 +58,12 @@ class Ensemble:
                 }
             except IndexError:
                 pdb.set_trace()
+
+            if data == 'NPR' and show:
+                momvars = np.mean([len([f for f in os.listdir(f'{path}/{mass_map[mass]}/{momenta[i]}')
+                                        if f.startswith(prefix) and f.endswith(str(vals[0])+'.h5')])
+                                   for i in range(len(momenta))])
+                cfgs[str(np.around(mass, 3))]['N_tw'] = momvars
 
         if show:
             df = pd.DataFrame.from_dict(cfgs, orient='columns')

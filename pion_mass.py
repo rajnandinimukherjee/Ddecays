@@ -133,6 +133,8 @@ class TwoPointFn:
 
             print(f'saved fit_results to {grp_name} in {self.Zdata_fname}')
 
+        return mpi
+
     def read_meson(self, mass: float) -> Stat:
 
         file = h5py.File(self.Zdata_fname, 'a')
