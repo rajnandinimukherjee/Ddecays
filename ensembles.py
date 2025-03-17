@@ -61,7 +61,7 @@ class Ensemble:
 
             if data == 'NPR' and show:
                 momvars = np.mean([len([f for f in os.listdir(f'{path}/{mass_map[mass]}/{momenta[i]}')
-                                        if f.startswith(prefix) and f.endswith(str(vals[0])+'.h5')])
+                                        if f.startswith(prefix) and f.endswith(str(vals[-1])+'.h5')])
                                    for i in range(len(momenta))])
                 cfgs[str(np.around(mass, 3))]['N_tw'] = momvars
 
@@ -76,3 +76,84 @@ def mass_str2float(mass: str) -> float:
     mass = mass.rsplit('_')[0]
     mass = mass.replace('m', '').replace('p', '.').replace('n', '-')
     return float(mass)
+
+
+def convert_to_phys(vec: np.ndarray, L: int, T: int) -> np.ndarray:
+    vec = np.array(list(map(float, vec)))
+    L, T = L/(2*np.pi), T/(2*np.pi)
+    return np.array(list(vec[:3]/L)+[vec[-1]/T])
+
+
+def decode_fname(fname: str) -> Tuple[int, List, List]:
+    components = fname.rsplit('_')
+    mom1 = components[3:7]
+    mom2 = components[7:10]
+    cfg = components[-1].rsplit('.')[-2]
+    num = components[-1].rsplit('.'+cfg)[0]
+
+    mom2.append(num)
+    return int(cfg), mom1, mom2
+
+
+def SMOM_combo_sort(arr: np.ndarray) -> np.ndarray:
+    """ sorts momentum combinations in the form
+        [[A,A,0,0], [B,0,B,0],
+         [A,A,A,A], [0,0,0,B],
+         [A,A,A,A], [B,B,B,B]]
+    """
+    new_arr = np.empty(shape=arr.shape, dtype=arr.dtype)
+    for i in range(3):
+        A, B = arr[i, 0, :], arr[i, 1, :]
+        if np.all(A != '0.0'):
+            if np.all(B[:3] == '0.0'):
+                idx = 1
+            else:
+                idx = 2
+        else:
+            idx = 0
+        new_arr[idx, 0], new_arr[idx, 1] = A, B
+
+    return new_arr
+
+
+SMOM_combos = [
+    r'A_A_0_0__B_0_B_0',
+    r'A_A_A_A__0_0_0_B',
+    r'A_A_A_A__B_B_B_B'
+]
+
+def MOM_combo_sort(arr: np.ndarray) -> np.ndarray:
+    """ sorts momentum combinations in the form
+    [[0,0,0,A],  [0,0,0,B],
+     [A,0,0,A],  [B,0,0,B],
+     [A,0,A,0],  [B,0,B,0],
+     [A,A,A,A],  [B,B,B,B],
+     [A,A,A,-A], [B,B,B,-B]]
+    """
+    new_arr = np.empty(shape=arr.shape, dtype=arr.dtype)
+    for i in range(5):
+        A, B = arr[i, 0, :], arr[i, 1, :]
+        if np.all(A != '0.0'):
+            if A[-1][0]=='-':
+                idx = 4
+            else:
+                idx = 3
+        elif np.all(A[:3] == '0.0'):
+            idx = 0
+        else:
+            if np.all(A[1:3] == '0.0') or np.all(A[2:] == '0.0'):
+                idx = 1
+            else:
+                idx = 2
+        new_arr[idx, 0], new_arr[idx, 1] = A, B
+
+    return new_arr
+
+
+MOM_combos = [
+    r'0_0_0_A__0_0_0_B',
+    r'A_0_0_A__B_0_0_B',
+    r'A_0_A_0__B_0_B_0',
+    r'A_A_A_A__B_B_B_B',
+    r'A_A_A_-A__B_B_B_-B',
+]

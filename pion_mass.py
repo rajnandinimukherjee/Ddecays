@@ -8,7 +8,8 @@ class TwoPointFn:
                 'SigmaXT', 'SigmaXY', 'SigmaXZ', 'SigmaYT', 'SigmaYZ', 'SigmaZT']
 
     def __init__(self, ensemble: str, gamma_src: str = 'Gamma5',
-                 gamma_snk: str = 'Gamma5', compute: bool = True) -> None:
+                 gamma_snk: str = 'Gamma5', compute: bool = True,
+                 scheme: str = 'SMOM') -> None:
         self.ens = Ensemble(ensemble)
         if gamma_src in self.vertices and gamma_snk in self.vertices:
             self.gamma_src, self.gamma_snk = gamma_src, gamma_snk
@@ -19,7 +20,7 @@ class TwoPointFn:
         self.path = self.ens.path + \
             f'/hadronic_ward_identity/{self.ens.dataname}/s0g0'
 
-        self.Zdata_fname = f'Z_factors/{self.ens.dataname}.hd5'
+        self.Zdata_fname = f'Z_factors/{self.ens.dataname}_{scheme}.hd5'
 
         self.compute = compute
         if self.compute:

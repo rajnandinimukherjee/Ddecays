@@ -190,7 +190,8 @@ class Stat:
         return new_stat
 
 
-Zero = Stat(val=0, err=0, btsp='fill')
+def Zero(shape: Tuple) -> Stat:
+    return Stat(val=np.zeros(shape=shape), btsp='fill')
 
 
 def join_stats(stats):
@@ -201,11 +202,10 @@ def join_stats(stats):
     )
 
 
-def bootstrap(data: np.ndarray, Nboot: int = Stat.N_boot, seed=1) -> np.ndarray:
-    """bootstrap samples generator -
-    if input data has same size as K,
-    assumes it's already a bootstrap sample
-    and does no further sampling"""
+def bootstrap(data: np.ndarray, Nboot: int = Stat.N_boot,
+              seed=1) -> np.ndarray:
+    """bootstrap samples generator - if input data has same size as Nboot,
+    assumes it's already a bootstrap sample and does no further sampling"""
 
     if type(seed) is str:
         seed = int(hash(seed)) % (2**32)
@@ -390,3 +390,34 @@ def fit_func(
 
 def foldcorr(corr: np.ndarray, T: int) -> np.ndarray:
     return 0.5*(corr[1:]+corr[::-1][:-1])[:int(T/2)]
+
+
+# ===== gamma matrices according to Grid conventions =================
+N_cd = N_col*N_dir
+
+gamma = {
+    "I": np.identity(N_dir, dtype="complex128"),
+    "X": np.zeros(shape=(N_dir, N_dir), dtype="complex128"),
+    "Y": np.zeros(shape=(N_dir, N_dir), dtype="complex128"),
+    "Z": np.zeros(shape=(N_dir, N_dir), dtype="complex128"),
+    "T": np.zeros(shape=(N_dir, N_dir), dtype="complex128"),
+}
+
+for i in range(N_dir):
+    gamma["X"][i, N_dir - i - 1] = 1j if i <= 1 else -1j
+    gamma["Y"][i, N_dir - i - 1] = 1 if (i == 1 or i == 2) else -1
+    gamma["Z"][i, (i + 2) % N_dir] = (-1j) if (i == 1 or i == 2) else 1j
+    gamma["T"][i, (i + 2) % N_dir] = 1
+
+gamma["5"] = gamma["X"] @ gamma["Y"] @ gamma["Z"] @ gamma["T"]
+
+# =====put color structure into gamma matrices====================
+Gamma = {
+    name: np.einsum("ab,cd->abcd", mtx, np.identity(N_col)).
+    swapaxes(1, 2).reshape((N_cd, N_cd), order='F')
+    for name, mtx in gamma.items()
+}
+
+
+def g5(prop: np.ndarray) -> np.ndarray:
+    return Gamma['5']@prop.conj().T@Gamma['5']
