@@ -9,11 +9,15 @@ class Fourquark:
         for b in (x, x + "Gamma5")
     ]
     decay_vertices = ["VApAVS+", "VApAVS-"]
-    decay_vtx_str = [r"_{[VA+AV]}^{\mathcal{S}=+}",
-                     r"_{[VA+AV]}^{\mathcal{S}=-}"]
+    decay_vtx_str = [r"_{[VA+AV]}^{\mathcal{S}=+}", r"_{[VA+AV]}^{\mathcal{S}=-}"]
 
-    def __init__(self, ensemble: str, scheme: str = "SMOM",
-                 compute: bool = False, norm: str = "A") -> None:
+    def __init__(
+        self,
+        ensemble: str,
+        scheme: str = "SMOM",
+        compute: bool = False,
+        norm: str = "A",
+    ) -> None:
         self.ens = Ensemble(ensemble)
         self.scheme = scheme
         self.prefix = f"{scheme}_FourQuark_00_"
@@ -43,70 +47,88 @@ class Fourquark:
 
         self.bilinear = Bilinear(ensemble, compute=False, scheme=self.scheme)
 
-    def plot_twist_ratios(self, denom_idx: int = 0,
-                          subscheme: str = "gamma",
-                          show: bool = False) -> None:
+    def plot_twist_diffs(
+        self, sub_idx: int = 0, subscheme: str = "gamma", show: bool = False
+    ) -> None:
 
         fig, ax = plt.subplots(nrows=len(self.decay_vertices), sharex=True)
         plt.subplots_adjust(hspace=0)
         sublabel = r"\gamma_\mu" if subscheme == "gamma" else r"\not{q}"
-        title = self.scheme+r"$^{"+sublabel + \
-            r"}$, $m_\pi=0$, all combos"
+        title = self.scheme + r"$^{" + sublabel + r"}$, $m_\pi=0$, all combos"
         plt.suptitle(title)
 
-        Zs_denom = self.load_chiral_extrap(
-            denom_idx, subscheme, plot=False)
+        Zs_sub = self.load_chiral_extrap(sub_idx, subscheme, plot=False)
         for momvar_idx in range(self.N_tw):
-            if momvar_idx != denom_idx:
-                Zs_num = self.load_chiral_extrap(
-                    momvar_idx, subscheme, plot=False)
+            if momvar_idx != sub_idx:
+                Zs = self.load_chiral_extrap(momvar_idx, subscheme, plot=False)
                 for v_idx, vertex in enumerate(self.decay_vertices):
-                    ratio = Zs_num[vertex]/Zs_denom[vertex]
-                    label_num = self.mom_combos[momvar_idx][1:-1]
-                    label_den = self.mom_combos[denom_idx][1:-1]
-                    label = r"$\frac{"+label_num+r"}{"+label_den+r"}$"
-                    ax[v_idx].errorbar(self.momenta, ratio.val,
-                                       yerr=ratio.err, fmt="o",
-                                       capsize=4, label=label)
-                    ax[v_idx].set_ylabel(r"$Z"+self.decay_vtx_str[v_idx] +
-                                         r"/Z_"+self.norm+r"^2$")
+                    diff = Zs[vertex] - Zs_sub[vertex]
+                    label = f"tw{momvar_idx}-tw{sub_idx}"
+                    ax[v_idx].errorbar(
+                        self.momenta,
+                        diff.val,
+                        yerr=diff.err,
+                        fmt="o",
+                        capsize=4,
+                        label=label,
+                    )
+                    ax[v_idx].set_ylabel(
+                        r"$Z" + self.decay_vtx_str[v_idx] + r"/Z_" + self.norm + r"^2$"
+                    )
 
         ax[-1].set_xlabel(r"$\sqrt{q^2}$ [GeV]")
         handles, labels = ax[-1].get_legend_handles_labels()
-        legend = fig.legend(handles, labels, loc="center", ncols=self.N_tw,
-                            fontsize="small", columnspacing=0.5,
-                            bbox_to_anchor=(0.55, 0.5))
+        legend = fig.legend(
+            handles,
+            labels,
+            loc="center",
+            ncol=self.N_tw - 1,
+            fontsize="small",
+            columnspacing=0.5,
+            bbox_to_anchor=(0.5, 0.87),
+        )
         legend.get_frame().set_facecolor("white")
         legend.get_frame().set_alpha(1)
 
-        fname = f"plots/{self.ens.name}_fq_Zs_chiral_extrap_tw_ratios.pdf"
+        fname = f"plots/{self.ens.name}_fq_Zs_chiral_extrap_tw_diffs.pdf"
         callPDF(fname, show=show)
         print(f"plotted to {os.getcwd()}/{fname}")
 
-    def plot_chiral_extrap_allmomvar(self, subscheme: str,
-                                     show: bool = False) -> None:
-        fig, ax = plt.subplots(nrows=len(self.decay_vertices),
-                               sharex=True, gridspec_kw={"hspace": 0})
+    def plot_chiral_extrap_allmomvar(self, subscheme: str, show: bool = False) -> None:
+        fig, ax = plt.subplots(
+            nrows=len(self.decay_vertices), sharex=True, gridspec_kw={"hspace": 0}
+        )
         sublabel = r"\gamma_\mu" if subscheme == "gamma" else r"\not{q}"
-        title = self.scheme+r"$^{"+sublabel + \
-            r"}$, $m_\pi=0$, all combos"
+        title = self.scheme + r"$^{" + sublabel + r"}$, $m_\pi=0$, all combos"
         plt.suptitle(title)
 
         for momvar_idx in range(self.N_tw):
             Zs = self.load_chiral_extrap(momvar_idx, subscheme, plot=False)
             for v_idx, vertex in enumerate(self.decay_vertices):
-                ax[v_idx].errorbar(self.momenta, Zs[vertex].val,
-                                   yerr=Zs[vertex].err, fmt="o",
-                                   capsize=4, label=self.mom_combos[momvar_idx])
+                ax[v_idx].errorbar(
+                    self.momenta,
+                    Zs[vertex].val,
+                    yerr=Zs[vertex].err,
+                    fmt="o",
+                    capsize=4,
+                    label=self.mom_combos[momvar_idx],
+                )
                 if momvar_idx == 0:
-                    ax[v_idx].set_ylabel(r"$Z"+self.decay_vtx_str[v_idx] +
-                                         r"/Z_"+self.norm+r"^2$")
+                    ax[v_idx].set_ylabel(
+                        r"$Z" + self.decay_vtx_str[v_idx] + r"/Z_" + self.norm + r"^2$"
+                    )
 
         ax[-1].set_xlabel(r"$\sqrt{q^2}$ [GeV]")
         handles, labels = ax[-1].get_legend_handles_labels()
-        legend = fig.legend(handles, labels, loc="center", ncols=self.N_tw,
-                            fontsize="small", columnspacing=0.5,
-                            bbox_to_anchor=(0.55, 0.5))
+        legend = fig.legend(
+            handles,
+            labels,
+            loc="center",
+            ncol=self.N_tw,
+            fontsize="small",
+            columnspacing=0.5,
+            bbox_to_anchor=(0.5, 0.87),
+        )
         legend.get_frame().set_facecolor("white")
         legend.get_frame().set_alpha(1)
 
@@ -114,87 +136,136 @@ class Fourquark:
         callPDF(fname, show=show)
         print(f"plotted to {os.getcwd()}/{fname}")
 
-    def load_chiral_extrap(self, momvar_idx: int, subscheme: str,
-                           plot: bool = False, show: bool = False) -> Dict:
+    def load_chiral_extrap(
+        self, momvar_idx: int, subscheme: str, plot: bool = False, show: bool = False
+    ) -> Dict:
 
         self.compute = False
         Zs = self.get_Z_all_masses(momvar_idx, subscheme, plot=False)
-        self.pion = TwoPointFn(
-            self.ens.name, compute=False, scheme=self.scheme)
+        self.pion = TwoPointFn(self.ens.name, compute=False, scheme=self.scheme)
         self.pion_masses = join_stats(self.pion.load_meson_masses())
 
         file = h5py.File(self.Zdata_fname, "r")
-        grp_name = f"Fourquark/m0p0/{subscheme}" +\
-            f"/momvar_{momvar_idx+1}"
+        grp_name = f"Fourquark/m0p0/{subscheme}" + f"/momvar_{momvar_idx+1}"
         grp = file[grp_name]
 
-        extrap = {vertex: Stat(
-            val=np.array(grp[f"{vertex}/central"][:]),
-            err=np.array(grp[f"{vertex}/errors"][:]),
-            btsp=np.array(grp[f"{vertex}/bootstrap"][:])
-        ) for vertex in self.decay_vertices}
+        extrap = {
+            vertex: Stat(
+                val=np.array(grp[f"{vertex}/central"][:]),
+                err=np.array(grp[f"{vertex}/errors"][:]),
+                btsp=np.array(grp[f"{vertex}/bootstrap"][:]),
+            )
+            for vertex in self.decay_vertices
+        }
         file.close()
 
         if plot:
-            fig, ax = plt.subplots(nrows=len(self.decay_vertices),
-                                   ncols=1, figsize=(3, 10))
+            fig, ax = plt.subplots(
+                nrows=len(self.decay_vertices), ncols=1, figsize=(3, 10)
+            )
             plt.subplots_adjust(hspace=0)
             sublabel = r"\gamma_\mu" if subscheme == "gamma" else r"\not{q}"
-            title = self.scheme+r"$^{"+sublabel + \
-                r"}$, mom combo "+str(momvar_idx+1)
+            title = (
+                self.scheme
+                + r"$^{"
+                + sublabel
+                + r"}$, mom combo "
+                + str(momvar_idx + 1)
+            )
             ax[0].set_title(title)
 
             for v_idx, vertex in enumerate(self.decay_vertices):
-                ax[v_idx].errorbar(self.momenta, extrap[vertex].val,
-                                   yerr=extrap[vertex].err, fmt="o",
-                                   capsize=4, label=f"extrap", c="k")
+                ax[v_idx].errorbar(
+                    self.momenta,
+                    extrap[vertex].val,
+                    yerr=extrap[vertex].err,
+                    fmt="o",
+                    capsize=4,
+                    label=f"extrap",
+                    c="k",
+                )
                 for m_idx, mass in enumerate(self.masses):
-                    pion_label = err_disp(self.pion_masses.val[m_idx],
-                                          self.pion_masses.err[m_idx])
-                    ax[v_idx].errorbar(self.momenta, Zs[mass][vertex].val,
-                                       yerr=Zs[mass][vertex].err, fmt="o",
-                                       capsize=4, label=r"$m_\pi="+pion_label+r"$")
-                ax[v_idx].set_ylabel(r"$Z"+self.decay_vtx_str[v_idx] +
-                                     r"/Z_"+self.norm+r"^2$")
+                    pion_label = err_disp(
+                        self.pion_masses.val[m_idx], self.pion_masses.err[m_idx]
+                    )
+                    ax[v_idx].errorbar(
+                        self.momenta,
+                        Zs[mass][vertex].val,
+                        yerr=Zs[mass][vertex].err,
+                        fmt="o",
+                        capsize=4,
+                        label=r"$m_\pi=" + pion_label + r"$",
+                    )
+                ax[v_idx].set_ylabel(
+                    r"$Z" + self.decay_vtx_str[v_idx] + r"/Z_" + self.norm + r"^2$"
+                )
 
             ax[-1].set_xlabel(r"$\sqrt{q^2}$ [GeV]")
             handles, labels = ax[-1].get_legend_handles_labels()
             fig.legend(handles, labels, loc="center right")
-            title = self.scheme+r"$^{"+sublabel + \
-                r"}$, $m_\pi=0$ mom combo "+str(momvar_idx+1)
+            title = (
+                self.scheme
+                + r"$^{"
+                + sublabel
+                + r"}$, $m_\pi=0$ mom combo "
+                + str(momvar_idx + 1)
+            )
             fname = f"plots/{self.ens.name}_fq_Zs_chiral_extrap_tw{momvar_idx}.pdf"
             callPDF(fname, show=show)
             print(f"plotted to {os.getcwd()}/{fname}")
 
         return extrap
 
-    def plot_chiral_extrap(self, mpis: Stat, Zs: Stat,
-                           res: Stat, title: str) -> None:
+    def plot_chiral_extrap(self, mpis: Stat, Zs: Stat, res: Stat, title: str) -> None:
 
         fig, ax = plt.subplots()
         x = mpis**2
-        ax.errorbar(x.val, Zs.val, xerr=x.err, yerr=Zs.err,
-                    fmt="o", capsize=4, label=r"$Z(am_q)$")
-        ax.errorbar([0.0], [res.val[0]], yerr=[res.err[0]],
-                    fmt="o", capsize=4, label=r"$Z(am_q=0)$")
+        ax.errorbar(
+            x.val,
+            Zs.val,
+            xerr=x.err,
+            yerr=Zs.err,
+            fmt="o",
+            capsize=4,
+            label=r"$Z(am_q)$",
+        )
+        ax.errorbar(
+            [0.0],
+            [res.val[0]],
+            yerr=[res.err[0]],
+            fmt="o",
+            capsize=4,
+            label=r"$Z(am_q=0)$",
+        )
         ax.axvline(0, color="k", ls="dashed")
         xmin, xmax = ax.get_xlim()
         xrange = np.linspace(-0.05, mpis.val[-1], 50)
         yrange = res.mapping(xrange)
-        ax.fill_between(xrange**2, yrange.val+yrange.err,
-                        yrange.val-yrange.err, color="k",
-                        alpha=0.2, label=r"fit")
-        ax.text(0.5, 0.1, r"$\chi^2/$DOF$=" +
-                str(np.around(res.chi_sq/res.DOF, 3))+r"$",
-                va="center", ha="center", transform=ax.transAxes)
+        ax.fill_between(
+            xrange**2,
+            yrange.val + yrange.err,
+            yrange.val - yrange.err,
+            color="k",
+            alpha=0.2,
+            label=r"fit",
+        )
+        ax.text(
+            0.5,
+            0.1,
+            r"$\chi^2/$DOF$=" + str(np.around(res.chi_sq / res.DOF, 3)) + r"$",
+            va="center",
+            ha="center",
+            transform=ax.transAxes,
+        )
         ax.set_xlim([xmin, xmax])
         ax.set_xlabel(r"$m_\pi^2$ [GeV${}^2$]")
         ax.set_ylabel(r"$Z_\Gamma/Z_q$")
         ax.set_title(title)
         ax.legend()
 
-    def chiral_extrap(self, momvar_idx: int, subscheme: str,
-                      plot: bool = False, save: bool = True) -> Dict:
+    def chiral_extrap(
+        self, momvar_idx: int, subscheme: str, plot: bool = False, save: bool = True
+    ) -> Dict:
 
         self.compute = False
         Zs = self.get_Z_all_masses(momvar_idx, subscheme, plot=False)
@@ -204,27 +275,27 @@ class Fourquark:
             self.pion_masses = join_stats(self.pion.load_meson_masses())
         else:
             print(
-                f"mismatch between NPR masses {self.masses} and \nvalence masses {self.pion.masses}")
+                f"mismatch between NPR masses {self.masses} and "+\
+                        "\nvalence masses {self.pion.masses}"
+            )
             return None
 
         extrap = {}
 
         for vertex in self.decay_vertices:
             extrap[vertex] = []
-            for m_idx in tqdm(range(len(self.momenta)),
-                              leave=False, desc=vertex):
+            for m_idx in tqdm(range(len(self.momenta)), leave=False, desc=vertex):
                 mom = self.momenta[m_idx]
-                ys = join_stats([Zs[mass][vertex][m_idx]
-                                 for mass in self.masses])
-                res = fit_func(self.pion_masses, ys, chiral_ansatz,
-                               [1, 1], correlated=False)
+                ys = join_stats([Zs[mass][vertex][m_idx] for mass in self.masses])
+                res = fit_func(
+                    self.pion_masses, ys, chiral_ansatz, [1, 1], correlated=False
+                )
                 extrap[vertex].append(res[0])
             extrap[vertex] = join_stats(extrap[vertex])
 
         if save:
             file = h5py.File(self.Zdata_fname, "a")
-            grp_name = f"Fourquark/m0p0/{subscheme}" +\
-                f"/momvar_{momvar_idx+1}"
+            grp_name = f"Fourquark/m0p0/{subscheme}" + f"/momvar_{momvar_idx+1}"
 
             if grp_name in file.keys():
                 del file[grp_name]
@@ -232,47 +303,68 @@ class Fourquark:
             grp = file.create_group(grp_name)
             grp.attrs["momentum_variation"] = self.mom_combos[momvar_idx]
 
-            grp.create_dataset("ap", data=np.array(self.momenta)/self.ens.ainv)
+            grp.create_dataset("ap", data=np.array(self.momenta) / self.ens.ainv)
+            grp.create_dataset("aq", data=self.qvecs[momvar_idx])
             for vertex in self.decay_vertices:
-                grp.create_dataset(f"{vertex}/central",
-                                   data=extrap[vertex].val)
-                grp.create_dataset(f"{vertex}/errors",
-                                   data=extrap[vertex].err)
-                grp.create_dataset(f"{vertex}/bootstrap",
-                                   data=extrap[vertex].btsp)
+                grp.create_dataset(f"{vertex}/central", data=extrap[vertex].val)
+                grp.create_dataset(f"{vertex}/errors", data=extrap[vertex].err)
+                grp.create_dataset(f"{vertex}/bootstrap", data=extrap[vertex].btsp)
 
             print(f"saved data to {grp_name} in {self.Zdata_fname}")
 
         if plot:
             sublabel = r"\gamma_\mu" if subscheme == "gamma" else r"\not{q}"
-            title = self.scheme+r"$^{"+sublabel + \
-                r"}$, $m_\pi=0$ mom combo "+str(momvar_idx+1)
+            title = (
+                self.scheme
+                + r"$^{"
+                + sublabel
+                + r"}$, $m_\pi=0$ mom combo "
+                + str(momvar_idx + 1)
+            )
             fname = f"plots/{self.ens.name}_fq_Zs_chiral_extrap_tw{momvar_idx}.pdf"
             self.plot_Z_factors(extrap, title, fname)
         return extrap
 
-    def get_Z_all_masses(self, momvar_idx: int, subscheme: str,
-                         plot: bool = True, run: bool = False, **kwargs) -> Dict:
+    def get_Z_all_masses(
+        self,
+        momvar_idx: int,
+        subscheme: str,
+        plot: bool = True,
+        run: bool = False,
+        **kwargs,
+    ) -> Dict:
 
-        Zs = {mass: self.get_Z_all_mom(mass, momvar_idx, subscheme,
-                                       run=run, **kwargs)
-              for mass in self.masses}
+        Zs = {
+            mass: self.get_Z_all_mom(mass, momvar_idx, subscheme, run=run, **kwargs)
+            for mass in self.masses
+        }
 
         if plot:
             fig, ax = plt.subplots(nrows=len(self.decay_vertices))
             plt.subplots_adjust(hspace=0)
             sublabel = r"\gamma_\mu" if subscheme == "gamma" else r"\not{q}"
-            title = self.scheme+r"$^{"+sublabel + \
-                r"}$, mom combo "+str(momvar_idx+1)
+            title = (
+                self.scheme
+                + r"$^{"
+                + sublabel
+                + r"}$, mom combo "
+                + str(momvar_idx + 1)
+            )
             ax[0].set_title(title)
 
             for v_idx, vertex in enumerate(self.decay_vertices):
                 for m_idx, mass in enumerate(self.masses):
-                    ax[v_idx].errorbar(self.momenta, Zs[mass][vertex].val,
-                                       yerr=Zs[mass][vertex].err, fmt="o",
-                                       capsize=4, label=f"{np.around(mass, 3)}")
-                ax[v_idx].set_ylabel(r"$Z"+self.decay_vtx_str[idx] +
-                                     r"/Z_"+self.norm+r"^2$")
+                    ax[v_idx].errorbar(
+                        self.momenta,
+                        Zs[mass][vertex].val,
+                        yerr=Zs[mass][vertex].err,
+                        fmt="o",
+                        capsize=4,
+                        label=f"{np.around(mass, 3)}",
+                    )
+                ax[v_idx].set_ylabel(
+                    r"$Z" + self.decay_vtx_str[v_idx] + r"/Z_" + self.norm + r"^2$"
+                )
 
             ax[-1].set_xlabel(r"$\sqrt{q^2}$ [GeV]")
             handles, labels = ax[-1].get_legend_handles_labels()
@@ -284,9 +376,15 @@ class Fourquark:
 
         return Zs
 
-    def get_Z_all_mom(self, mass: float, momvar_idx: int,
-                      subscheme: str, normalise: bool = True,
-                      run: bool = True, plot: bool = False) -> Dict:
+    def get_Z_all_mom(
+        self,
+        mass: float,
+        momvar_idx: int,
+        subscheme: str,
+        normalise: bool = True,
+        run: bool = True,
+        plot: bool = False,
+    ) -> Dict:
         Zs = {}
 
         if self.compute and run:
@@ -294,8 +392,7 @@ class Fourquark:
                 range(len(self.momenta)), leave=False, desc=str(np.around(mass, 3))
             ):
                 mom = self.momenta[idx]
-                proj_verts = self.project_vertices(
-                    mass, mom, momvar_idx, subscheme)
+                proj_verts = self.project_vertices(mass, mom, momvar_idx, subscheme)
                 for key, vertex in proj_verts.items():
                     if key in Zs:
                         Zs[key].append(vertex ** (-1))
@@ -310,28 +407,33 @@ class Fourquark:
             Zs = self.load_Z_factors(mass, momvar_idx, subscheme)
 
         if normalise:
-            Z_bl = self.bilinear.get_Z_all_mom(
-                mass, momvar_idx, subscheme)[self.norm]
+            Z_bl = self.bilinear.get_Z_all_mom(mass, momvar_idx, subscheme)[self.norm]
             for vertex, mtx in Zs.copy().items():
                 Zs[vertex] = mtx / (Z_bl**2)
 
         if plot:
             sublabel = r"\gamma_\mu" if subscheme == "gamma" else r"\not{q}"
-            title = self.scheme+r"$^{"+sublabel+r"}$, $am_q=" +\
-                str(np.around(mass, 3))+r"$ mom combo "+str(momvar_idx+1)
-            fname = f"plots/{self.ens.name}_fq_Zs_{
-                self.mass_map[mass]}_tw{momvar_idx}.pdf"
+            title = (
+                self.scheme
+                + r"$^{"
+                + sublabel
+                + r"}$, $am_q="
+                + str(np.around(mass, 3))
+                + r"$ mom combo "
+                + str(momvar_idx + 1)
+            )
+            fname = (
+                f"plots/{self.ens.name}_fq_Zs_{self.mass_map[mass]}_tw{momvar_idx}.pdf"
+            )
             self.plot_Z_factors(Zs, title, fname)
 
         return Zs
 
-    def load_Z_factors(self, mass: float, momvar_idx: int,
-                       subscheme: str) -> Dict:
+    def load_Z_factors(self, mass: float, momvar_idx: int, subscheme: str) -> Dict:
 
         file = h5py.File(self.Zdata_fname, "r")
         grp_name = (
-            f"Fourquark/{self.mass_map[mass]
-                         }/{subscheme}" + f"/momvar_{momvar_idx+1}"
+            f"Fourquark/{self.mass_map[mass]}/{subscheme}" + f"/momvar_{momvar_idx+1}"
         )
 
         grp = file[grp_name]
@@ -339,7 +441,7 @@ class Fourquark:
         self.qvecs[momvar_idx] = np.array(grp["aq"][:])
         Zs = {}
         for vertex in grp.keys():
-            if vertex != "ap":
+            if vertex not in ["ap", "aq"]:
                 Zs[vertex] = Stat(
                     val=grp[f"{vertex}/central"][:],
                     err=grp[f"{vertex}/errors"][:],
@@ -349,13 +451,13 @@ class Fourquark:
         file.close()
         return Zs
 
-    def save_Z_factors(self, Zs: Dict, mass: float,
-                       momvar_idx: int, subscheme: str) -> None:
+    def save_Z_factors(
+        self, Zs: Dict, mass: float, momvar_idx: int, subscheme: str
+    ) -> None:
 
         file = h5py.File(self.Zdata_fname, "a")
         grp_name = (
-            f"Fourquark/{self.mass_map[mass]
-                         }/{subscheme}" + f"/momvar_{momvar_idx+1}"
+            f"Fourquark/{self.mass_map[mass]}/{subscheme}" + f"/momvar_{momvar_idx+1}"
         )
 
         if grp_name in file.keys():
@@ -383,15 +485,17 @@ class Fourquark:
             ax[idx].errorbar(
                 self.momenta, Zs[vertex].val, yerr=Zs[vertex].err, fmt="o", capsize=4
             )
-            ax[idx].set_ylabel(r"$Z" + self.decay_vtx_str[idx] +
-                               r"/Z_"+self.norm+r"^2$")
+            ax[idx].set_ylabel(
+                r"$Z" + self.decay_vtx_str[idx] + r"/Z_" + self.norm + r"^2$"
+            )
         ax[1].set_xlabel(r"$\sqrt{q^2}$ [GeV]")
         ax[0].set_title(title)
         callPDF(fname, show=False)
         print(f"plotted to {os.getcwd()}/{fname}")
 
-    def project_vertices(self, mass: float, mom: float,
-                         momvar_idx: int, subscheme: str) -> Dict:
+    def project_vertices(
+        self, mass: float, mom: float, momvar_idx: int, subscheme: str
+    ) -> Dict:
 
         mass_str, mom_str = self.mass_map[mass], self.mom_map[mom]
         theta_in, theta_out = self.theta_str[mass_str][mom_str][momvar_idx]
@@ -409,12 +513,10 @@ class Fourquark:
         for key, mtx in amputees.items():
             proj = projectors[key]
             projected[key] = Stat(
-                val=np.einsum("abcd,badc", proj.val,
-                              mtx.val, optimize=True).real,
+                val=np.einsum("abcd,badc", proj.val, mtx.val, optimize=True).real,
                 btsp=np.array(
                     [
-                        np.einsum(
-                            "abcd,badc", proj.btsp[k], mtx.btsp[k], optimize=True)
+                        np.einsum("abcd,badc", proj.btsp[k], mtx.btsp[k], optimize=True)
                         for k in range(mtx.N_boot)
                     ]
                 ).real,
@@ -422,9 +524,9 @@ class Fourquark:
 
         return projected
 
-    def amputate_fourquarks(self, mass: float, mom: float,
-                            theta_in: np.ndarray,
-                            theta_out: np.ndarray) -> Dict:
+    def amputate_fourquarks(
+        self, mass: float, mom: float, theta_in: np.ndarray, theta_out: np.ndarray
+    ) -> Dict:
 
         operators = self.construct_operators(
             mass=mass, mom=mom, theta_in=theta_in, theta_out=theta_out
@@ -439,8 +541,7 @@ class Fourquark:
         amputees = {}
         for key, mtx in operators.items():
             amputees[key] = Stat(
-                val=fourquark_amputation(
-                    out_prop_inv.val, in_prop_inv.val, mtx.val),
+                val=fourquark_amputation(out_prop_inv.val, in_prop_inv.val, mtx.val),
                 btsp=np.array(
                     [
                         fourquark_amputation(
@@ -456,10 +557,21 @@ class Fourquark:
         fqs = self.read_in_fqs(**loadkwargs)
 
         doubles = {
-            "VA": sum([fqs[self.vertices.index([f"Gamma{mu}", f"Gamma{mu}Gamma5"])]
-                       for mu in dirs], Zero(fqs[0].shape)),
-            "AV": sum([fqs[self.vertices.index([f"Gamma{mu}Gamma5", f"Gamma{mu}"])]
-                       for mu in dirs], Zero(fqs[0].shape))}
+            "VA": sum(
+                [
+                    fqs[self.vertices.index([f"Gamma{mu}", f"Gamma{mu}Gamma5"])]
+                    for mu in dirs
+                ],
+                Zero(fqs[0].shape),
+            ),
+            "AV": sum(
+                [
+                    fqs[self.vertices.index([f"Gamma{mu}Gamma5", f"Gamma{mu}"])]
+                    for mu in dirs
+                ],
+                Zero(fqs[0].shape),
+            ),
+        }
         operators = {"VApAV": doubles["VA"] + doubles["AV"]}
 
         for key, mtx in operators.copy().items():
@@ -469,9 +581,9 @@ class Fourquark:
 
         return operators
 
-    def read_in_fqs(self, mass: float, mom: float,
-                    theta_in: np.ndarray,
-                    theta_out: np.ndarray) -> List:
+    def read_in_fqs(
+        self, mass: float, mom: float, theta_in: np.ndarray, theta_out: np.ndarray
+    ) -> List:
 
         theta_in_str = "_".join(theta_in)
         theta_out_str = "_".join(theta_out)
@@ -513,8 +625,7 @@ class Fourquark:
 
         return fourquarks
 
-    def read_in_externalLeg(self, mass: float, mom: float,
-                            theta: np.ndarray) -> Stat:
+    def read_in_externalLeg(self, mass: float, mom: float, theta: np.ndarray) -> Stat:
         """Given theta, reads in data for external leg"""
 
         prefix = "ExternalLeg_0_"
@@ -530,8 +641,7 @@ class Fourquark:
 
         for cf in range(self.N_cf):
             try:
-                corr = h5py.File(files[cf], "r")[
-                    "ExternalLeg"]["corr"][0, 0, :]
+                corr = h5py.File(files[cf], "r")["ExternalLeg"]["corr"][0, 0, :]
             except OSError:
                 print(fname)
                 pdb.set_trace()
@@ -558,10 +668,8 @@ class Fourquark:
             if [mom1, mom2] in mom_combinations:
                 continue
             else:
-                partial_str = f"{self.prefix}" + \
-                    "_".join(mom1) + "_" + "_".join(mom2)
-                other_configs = [
-                    f for f in all_files if f.startswith(partial_str)]
+                partial_str = f"{self.prefix}" + "_".join(mom1) + "_" + "_".join(mom2)
+                other_configs = [f for f in all_files if f.startswith(partial_str)]
                 if len(other_configs) == self.N_cf:
                     mom_combinations.append([mom1, mom2])
                 else:
@@ -585,15 +693,16 @@ class Fourquark:
         }
 
         self.mom_map = {
-            np.linalg.norm(convert_to_phys(
-                theta[0][0], self.ens.L, self.ens.T))
+            np.linalg.norm(convert_to_phys(theta[0][0], self.ens.L, self.ens.T))
             * self.ens.ainv: mom_str
             for mom_str, theta in self.theta_str[self.mass_map[self.masses[0]]].items()
         }
         self.momenta = sorted(list(self.mom_map.keys()))
 
-        self.qvecs = {momvar_idx: np.zeros(shape=(len(self.momenta), N_dir))
-                      for momvar_idx in range(self.N_tw)}
+        self.qvecs = {
+            momvar_idx: np.zeros(shape=(len(self.momenta), N_dir))
+            for momvar_idx in range(self.N_tw)
+        }
         for momvar_idx in range(self.N_tw):
             for mom_idx, mom in enumerate(self.momenta):
                 mass_str = self.mass_map[self.masses[0]]
@@ -601,7 +710,9 @@ class Fourquark:
                 theta_in, theta_out = self.theta_str[mass_str][mom_str][momvar_idx]
                 p_in = convert_to_phys(theta_in, self.ens.L, self.ens.T)
                 p_out = convert_to_phys(theta_out, self.ens.L, self.ens.T)
-                self.qvecs[momvar_idx][mom_idx, :] = p_in-p_out
+                self.qvecs[momvar_idx][mom_idx, :] = (
+                    p_in - p_out if self.scheme == "SMOM" else p_in
+                )
 
 
 def fourquark_projectors(subscheme: str, qvec: np.ndarray) -> Dict:
@@ -612,18 +723,21 @@ def fourquark_projectors(subscheme: str, qvec: np.ndarray) -> Dict:
 
     if subscheme == "qslash":
         qvec = np.sin(qvec)
-        qslash = np.sum([qvec[i] * myGamma[dirs[i]]
-                        for i in range(N_dir)], axis=0)
+        qslash = np.sum([qvec[i] * myGamma[dirs[i]] for i in range(N_dir)], axis=0)
         qsq = qvec.dot(qvec)
         # replace \gamma_\mu with \slashed{q}q_\mu/q^2
         for i in range(N_dir):
             myGamma[dirs[i]] = qslash * qvec[i] / qsq
 
     doubles = {
-        "VA": np.sum([np.tensordot(myGamma[i], myGamma[i] @ myGamma["5"],
-                                   axes=0) for i in dirs], axis=0),
-        "AV": np.sum([np.tensordot(myGamma[i] @ myGamma["5"], myGamma[i],
-                                   axes=0) for i in dirs], axis=0)
+        "VA": np.sum(
+            [np.tensordot(myGamma[i], myGamma[i] @ myGamma["5"], axes=0) for i in dirs],
+            axis=0,
+        ),
+        "AV": np.sum(
+            [np.tensordot(myGamma[i] @ myGamma["5"], myGamma[i], axes=0) for i in dirs],
+            axis=0,
+        ),
     }
 
     projectors = {"VApAV": doubles["VA"] + doubles["AV"]}
