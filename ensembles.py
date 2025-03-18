@@ -117,10 +117,11 @@ def SMOM_combo_sort(arr: np.ndarray) -> np.ndarray:
 
 
 SMOM_combos = [
-    r'A_A_0_0__B_0_B_0',
-    r'A_A_A_A__0_0_0_B',
-    r'A_A_A_A__B_B_B_B'
+    r'$\left(p_1^x-p_2^x,p_1^y,-p_2^z,0\right)$',
+    r'$\left(p_1^x,p_1^y,p_1^z,p_1^t-p_2^t\right)$',
+    r'$\left(p_1^x-p_2^x,p_1^y-p_2^y,p_1^z-p_2^z,p_1^t-p_2^t\right)$'
 ]
+
 
 def MOM_combo_sort(arr: np.ndarray) -> np.ndarray:
     """ sorts momentum combinations in the form
@@ -134,7 +135,7 @@ def MOM_combo_sort(arr: np.ndarray) -> np.ndarray:
     for i in range(5):
         A, B = arr[i, 0, :], arr[i, 1, :]
         if np.all(A != '0.0'):
-            if A[-1][0]=='-':
+            if A[-1][0] == '-':
                 idx = 4
             else:
                 idx = 3
@@ -156,4 +157,12 @@ MOM_combos = [
     r'A_0_A_0__B_0_B_0',
     r'A_A_A_A__B_B_B_B',
     r'A_A_A_-A__B_B_B_-B',
+]
+
+MOM_combos = [
+    r'$\left(0,0,0,p_1^t-p_2^t\right)$',
+    r'$\left(p_1^x-p_2^x,0,0,p_1^t-p_2^t\right)$',
+    r'$\left(p_1^x-p_2^x,0,p_1^z-p_2^z,0\right)$',
+    r'$\left(p_1^x-p_2^x,p_1^y-p_2^y,p_1^z-p_2^z,p_1^t-p_2^t\right)$',
+    r'$\left(p_1^x-p_2^x,p_1^y-p_2^y,p_1^z-p_2^z,-p_1^t+p_2^t\right)$',
 ]
