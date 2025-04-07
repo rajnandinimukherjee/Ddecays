@@ -104,7 +104,7 @@ class Bilinear:
             )
             ax[0].set_title(title)
 
-            for c_idx, current in enumerate(self.currents):
+            for c_idx, current in enumerate(self.currents+["q"]):
                 for m_idx, mass in enumerate(self.masses):
                     pion_label = err_disp(
                         self.pion_masses.val[m_idx], self.pion_masses.err[m_idx]
@@ -203,14 +203,13 @@ class Bilinear:
             self.pion_masses = join_stats(self.pion.load_meson_masses())
         else:
             print(
-                f"mismatch between NPR masses {
-                    self.masses} and \nvalence masses {self.pion.masses}"
+                f"mismatch between NPR masses {self.masses} and \nvalence masses {self.pion.masses}"
             )
             return None
 
         extrap = {}
 
-        for c_idx, current in enumerate(self.currents):
+        for c_idx, current in enumerate(self.currents+["q"]):
             extrap[current] = []
             for m_idx in tqdm(range(len(self.momenta)), leave=False, desc=current):
                 mom = self.momenta[m_idx]
@@ -245,7 +244,7 @@ class Bilinear:
             grp.create_dataset("ap", data=np.array(
                 self.momenta) / self.ens.ainv)
             grp.create_dataset("aq", data=self.qvecs[momvar_idx])
-            for current in self.currents:
+            for current in self.currents+["q"]:
                 grp.create_dataset(f"{current}/central",
                                    data=extrap[current].val)
                 grp.create_dataset(f"{current}/errors",
@@ -279,7 +278,7 @@ class Bilinear:
 
         if plot:
             fig, ax = plt.subplots(
-                nrows=len(self.currents), ncols=1, figsize=(3, 10))
+                nrows=len(self.currents)+1, ncols=1, figsize=(3, 10))
             plt.subplots_adjust(hspace=0)
             sublabel = r"\gamma_\mu" if subscheme == "gamma" else r"\not{q}"
             title = (
@@ -291,7 +290,7 @@ class Bilinear:
             )
             ax[0].set_title(title)
 
-            for c_idx, current in enumerate(self.currents):
+            for c_idx, current in enumerate(self.currents+["q"]):
                 for m_idx, mass in enumerate(self.masses):
                     ax[c_idx].errorbar(
                         self.momenta,
@@ -313,6 +312,7 @@ class Bilinear:
 
         return Zs
 
+
     def get_Z_all_mom(
         self, mass: float, momvar_idx: int, subscheme: str, plot: bool = False
     ) -> Dict:
@@ -333,6 +333,8 @@ class Bilinear:
                         Zs[current] = [vertex ** (-1)]
 
             Zs = {current: join_stats(Z) for current, Z in Zs.items()}
+            Zs["q"] = join_stats([self.compute_Zq(mass, mom, momvar_idx)
+                                  for mom in self.momenta])
 
             self.save_Z_factors(Zs, mass, momvar_idx, subscheme)
 
@@ -350,8 +352,7 @@ class Bilinear:
                 + r"$ mom combo "
                 + str(momvar_idx + 1)
             )
-            fname = f"plots/{self.ens.name}_Zs_{
-                self.mass_map[mass]}_tw{momvar_idx}.pdf"
+            fname = f"plots/{self.ens.name}_Zs_{self.mass_map[mass]}_tw{momvar_idx}.pdf"
             self.plot_Z_factors(Zs, title, fname)
 
         return Zs
@@ -360,15 +361,14 @@ class Bilinear:
 
         file = h5py.File(self.Zdata_fname, "r")
         grp_name = (
-            f"Bilinear/{self.mass_map[mass]
-                        }/{subscheme}" + f"/momvar_{momvar_idx+1}"
+            f"Bilinear/{self.mass_map[mass]}/{subscheme}" + f"/momvar_{momvar_idx+1}"
         )
 
         grp = file[grp_name]
         self.momenta = list(np.array(grp["ap"][:]) * self.ens.ainv)
         self.qvecs[momvar_idx] = np.array(grp["aq"][:])
         Zs = {}
-        for current in self.currents:
+        for current in self.currents+["q"]:
             Zs[current] = Stat(
                 val=grp[f"{current}/central"][:],
                 err=grp[f"{current}/errors"][:],
@@ -384,8 +384,8 @@ class Bilinear:
 
         file = h5py.File(self.Zdata_fname, "a")
         grp_name = (
-            f"Bilinear/{self.mass_map[mass]
-                        }/{subscheme}" + f"/momvar_{momvar_idx+1}"
+            f"Bilinear/{self.mass_map[mass]}/{subscheme}" +\
+                    f"/momvar_{momvar_idx+1}"
         )
 
         if grp_name in file.keys():
@@ -397,7 +397,7 @@ class Bilinear:
         grp.create_dataset("ap", data=np.array(self.momenta) / self.ens.ainv)
         grp.create_dataset("aq", data=self.qvecs[momvar_idx])
 
-        for current in self.currents:
+        for current in self.currents+["q"]:
             grp.create_dataset(f"{current}/central", data=Zs[current].val)
             grp.create_dataset(f"{current}/errors", data=Zs[current].err)
             grp.create_dataset(f"{current}/bootstrap", data=Zs[current].btsp)
@@ -437,6 +437,29 @@ class Bilinear:
         ax[0].set_title(title)
         callPDF(fname, show=False)
         print(f"plotted to {os.getcwd()}/{fname}")
+
+    def compute_Zq(self, mass: float, mom: float, momvar_idx: int) -> Stat:
+        mass_str, mom_str = self.mass_map[mass], self.mom_map[mom]
+        theta_in, theta_out = self.theta_str[mass_str][mom_str][momvar_idx]
+
+        in_prop = self.read_in_externalLeg(mass, mom, theta_in)
+        in_prop.inv = in_prop.use_func(np.linalg.inv)
+        in_prop.mom = convert_to_phys(theta_in, self.ens.L, self.ens.T)
+
+        out_prop = self.read_in_externalLeg(mass, mom, theta_out)
+        out_prop_g5 = out_prop.use_func(g5)
+        out_prop.inv = out_prop_g5.use_func(np.linalg.inv)
+        out_prop.mom = convert_to_phys(theta_out, self.ens.L, self.ens.T)
+
+        slashes = []
+        for prop in [in_prop, out_prop]:
+            psl, psq = qslash(prop.mom)
+            slashes.append(Stat(
+                val=-1j*prop.inv.val@psl/(12*psq),
+                btsp=np.array([-1j*prop.inv.btsp[k,]@psl/(12*psq)
+                               for k in range(prop.N_boot)])))
+        
+        return sum(slashes,Zero((1,))).use_func(np.trace).use_func(np.real)*0.5
 
     def project_vertices(
         self, mass: float, mom: float, momvar_idx: int, subscheme: str
@@ -663,13 +686,10 @@ def bilinear_projectors(subscheme: str, qvec: np.ndarray) -> Dict:
     myGamma = Gamma.copy()
 
     if subscheme == "qslash":
-        qvec = np.sin(qvec)
-        qslash = np.sum([qvec[i] * myGamma[dirs[i]]
-                        for i in range(N_dir)], axis=0)
-        qsq = qvec.dot(qvec)
+        qsl, qsq = qslash(qvec)
         # replace \gamma_\mu with \slashed{q}q_\mu/q^2
         for i in range(N_dir):
-            myGamma[dirs[i]] = qslash * qvec[i] / qsq
+            myGamma[dirs[i]] = qsl * qvec[i] / qsq
 
     projectors = {
         "S": [myGamma["I"]],
@@ -703,3 +723,11 @@ def bilinear_projectors(subscheme: str, qvec: np.ndarray) -> Dict:
                for mtx in proj]
         for curr, proj in projectors.items()
     }
+
+def qslash(qvec: np.ndarray):
+    qvec = np.sin(qvec)
+    qslash = np.sum([qvec[i] * Gamma[dirs[i]]
+                    for i in range(N_dir)], axis=0)
+    qsq = qvec.dot(qvec)
+    return qslash, qsq
+

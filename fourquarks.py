@@ -100,10 +100,10 @@ class Fourquark:
                         alpha=0.3 if subtract_q6 else 1.0,
                         label=None if subtract_q6 else label,
                     )
-                    ax[v_idx].set_ylabel(
-                        r"$Z" + self.decay_vtx_str[v_idx] +
-                        r"/Z_" + self.norm + r"^2$"
-                    )
+                    ylabel = r"$Z" + self.decay_vtx_str[v_idx]
+                    if self.norm!="q"
+                        ylabel += r"/Z_" + self.norm + r"^2$"
+                    ax[v_idx].set_ylabel(ylabel)
                     # ax[v_idx].set_xlim([0.0, 1.0])
                     self.twist_diffs[sub_idx + 1][momvar_idx + 1][vertex] = {
                         "del_aq4": np.abs(del_aq4),
@@ -193,10 +193,10 @@ class Fourquark:
                     label=self.mom_combos[momvar_idx],
                 )
                 if momvar_idx == 0:
-                    ax[v_idx].set_ylabel(
-                        r"$Z" + self.decay_vtx_str[v_idx] +
-                        r"/Z_" + self.norm + r"^2$"
-                    )
+                    ylabel = r"$Z" + self.decay_vtx_str[v_idx]
+                    if self.norm!="q"
+                        ylabel += r"/Z_" + self.norm + r"^2$"
+                    ax[v_idx].set_ylabel(ylabel)
 
         ax[-1].set_xlabel(r"$\sqrt{q^2}$ [GeV]")
         handles, labels = ax[-1].get_legend_handles_labels()
@@ -277,10 +277,10 @@ class Fourquark:
                         capsize=4,
                         label=r"$m_\pi=" + pion_label + r"$",
                     )
-                ax[v_idx].set_ylabel(
-                    r"$Z" + self.decay_vtx_str[v_idx] +
-                    r"/Z_" + self.norm + r"^2$"
-                )
+                ylabel = r"$Z" + self.decay_vtx_str[v_idx]
+                if self.norm!="q"
+                    ylabel += r"/Z_" + self.norm + r"^2$"
+                ax[v_idx].set_ylabel(ylabel)
 
             ax[-1].set_xlabel(r"$\sqrt{q^2}$ [GeV]")
             handles, labels = ax[-1].get_legend_handles_labels()
@@ -341,7 +341,7 @@ class Fourquark:
         )
         ax.set_xlim([xmin, xmax])
         ax.set_xlabel(r"$m_\pi^2$ [GeV${}^2$]")
-        ax.set_ylabel(r"$Z_\Gamma/Z_q$")
+        ax.set_ylabel(r"$Z_\Gamma$")
         ax.set_title(title)
         ax.legend()
 
@@ -450,10 +450,10 @@ class Fourquark:
                         capsize=4,
                         label=f"{np.around(mass, 3)}",
                     )
-                ax[v_idx].set_ylabel(
-                    r"$Z" + self.decay_vtx_str[v_idx] +
-                    r"/Z_" + self.norm + r"^2$"
-                )
+                ylabel = r"$Z" + self.decay_vtx_str[idx]
+                if self.norm!="q"
+                    ylabel += r"/Z_" + self.norm + r"^2$"
+                ax[idx].set_ylabel(ylabel)
 
             ax[-1].set_xlabel(r"$\sqrt{q^2}$ [GeV]")
             handles, labels = ax[-1].get_legend_handles_labels()
@@ -500,7 +500,10 @@ class Fourquark:
             Z_bl = self.bilinear.get_Z_all_mom(
                 mass, momvar_idx, subscheme)[self.norm]
             for vertex, mtx in Zs.copy().items():
-                Zs[vertex] = mtx / (Z_bl**2)
+                if self.norm == "q":
+                    Zs[vertex] = mtx * (Z_bl**2)
+                else:
+                    Zs[vertex] = mtx / (Z_bl**2)
 
         if plot:
             sublabel = r"\gamma_\mu" if subscheme == "gamma" else r"\not{q}"
@@ -579,9 +582,10 @@ class Fourquark:
             ax[idx].errorbar(
                 self.momenta, Zs[vertex].val, yerr=Zs[vertex].err, fmt="o", capsize=4
             )
-            ax[idx].set_ylabel(
-                r"$Z" + self.decay_vtx_str[idx] + r"/Z_" + self.norm + r"^2$"
-            )
+            ylabel = r"$Z" + self.decay_vtx_str[idx]
+            if self.norm!="q"
+                ylabel += r"/Z_" + self.norm + r"^2$"
+            ax[idx].set_ylabel(ylabel)
         ax[1].set_xlabel(r"$\sqrt{q^2}$ [GeV]")
         ax[0].set_title(title)
         callPDF(fname, show=False)
@@ -825,13 +829,10 @@ def fourquark_projectors(subscheme: str, qvec: np.ndarray) -> Dict:
     myGamma = Gamma.copy()
 
     if subscheme == "qslash":
-        qvec = np.sin(qvec)
-        qslash = np.sum([qvec[i] * myGamma[dirs[i]]
-                        for i in range(N_dir)], axis=0)
-        qsq = qvec.dot(qvec)
+        qsl, qsq = qslash(qvec)
         # replace \gamma_\mu with \slashed{q}q_\mu/q^2
         for i in range(N_dir):
-            myGamma[dirs[i]] = qslash * qvec[i] / qsq
+            myGamma[dirs[i]] = qsl * qvec[i] / qsq
 
     VA = np.sum(
         [np.tensordot(myGamma[i], myGamma[i] @ myGamma["5"], axes=0)
