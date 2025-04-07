@@ -9,7 +9,8 @@ class Fourquark:
         for b in (x, x + "Gamma5")
     ]
     decay_vertices = ["VApAVS+", "VApAVS-"]
-    decay_vtx_str = [r"_{[VA+AV]}^{\mathcal{S}=+}", r"_{[VA+AV]}^{\mathcal{S}=-}"]
+    decay_vtx_str = [r"_{[VA+AV]}^{\mathcal{S}=+}",
+                     r"_{[VA+AV]}^{\mathcal{S}=-}"]
 
     def __init__(
         self,
@@ -43,40 +44,115 @@ class Fourquark:
                 if mass_str != "m0p0"
             }
             self.masses = sorted(list(self.mass_map.keys()))
-            self.qvecs = {}
+            self.aqvecs = {}
 
         self.bilinear = Bilinear(ensemble, compute=False, scheme=self.scheme)
+        self.twist_diffs = {}
 
     def plot_twist_diffs(
-        self, sub_idx: int = 0, subscheme: str = "gamma", show: bool = False
+        self,
+        sub_idx: int = 0,
+        subscheme: str = "gamma",
+        show: bool = False,
+        subtract_q6: bool = True,
+        num_params: int = 2,
+        zoom: bool = False,
+        **kwargs,
     ) -> None:
+
+        self.twist_diffs[sub_idx + 1] = {}
 
         fig, ax = plt.subplots(nrows=len(self.decay_vertices), sharex=True)
         plt.subplots_adjust(hspace=0)
         sublabel = r"\gamma_\mu" if subscheme == "gamma" else r"\not{q}"
-        title = self.scheme + r"$^{" + sublabel + r"}$, $m_\pi=0$, all combos"
+        title = self.scheme + r"$^{" + sublabel + \
+            r"}$, $m_\pi=0$, twist differences"
         plt.suptitle(title)
 
         Zs_sub = self.load_chiral_extrap(sub_idx, subscheme, plot=False)
+        aq4_sub = np.sum(self.aqvecs[sub_idx + 1] ** 4, axis=1)
+        aq6_sub = np.sum(self.aqvecs[sub_idx + 1] ** 6, axis=1)
         for momvar_idx in range(self.N_tw):
             if momvar_idx != sub_idx:
+                self.twist_diffs[sub_idx + 1][momvar_idx + 1] = {}
                 Zs = self.load_chiral_extrap(momvar_idx, subscheme, plot=False)
+                aq4 = np.sum(self.aqvecs[momvar_idx + 1] ** 4, axis=1)
+                aq6 = np.sum(self.aqvecs[momvar_idx + 1] ** 6, axis=1)
+                del_aq4 = aq4 - aq4_sub
+                del_aq6 = aq6 - aq6_sub
+
+                sign = del_aq4[0] / np.abs(del_aq4[0])
                 for v_idx, vertex in enumerate(self.decay_vertices):
                     diff = Zs[vertex] - Zs_sub[vertex]
-                    label = f"tw{momvar_idx}-tw{sub_idx}"
+                    label = (
+                        f"twist ${momvar_idx+1}-{sub_idx+1}$"
+                        if sign > 0
+                        else f"twist ${sub_idx+1}-{momvar_idx+1}$"
+                    )
                     ax[v_idx].errorbar(
-                        self.momenta,
+                        np.abs(del_aq4),
+                        # self.momenta,
                         diff.val,
                         yerr=diff.err,
                         fmt="o",
                         capsize=4,
-                        label=label,
+                        color=pltcolors[momvar_idx],
+                        alpha=0.3 if subtract_q6 else 1.0,
+                        label=None if subtract_q6 else label,
                     )
                     ax[v_idx].set_ylabel(
-                        r"$Z" + self.decay_vtx_str[v_idx] + r"/Z_" + self.norm + r"^2$"
+                        r"$Z" + self.decay_vtx_str[v_idx] +
+                        r"/Z_" + self.norm + r"^2$"
                     )
+                    # ax[v_idx].set_xlim([0.0, 1.0])
+                    self.twist_diffs[sub_idx + 1][momvar_idx + 1][vertex] = {
+                        "del_aq4": np.abs(del_aq4),
+                        "Z_diff": diff,
+                        "label": label,
+                    }
+                    if zoom:
+                        xmin, xmax = ax[v_idx].get_xlim()
+                        ax[v_idx].set_xlim([-0.1, 1.0])
+                    if subtract_q6:
+                        res = fit_func(
+                            del_aq4,
+                            diff,
+                            twist_diff_ansatz,
+                            guess=[0.1, 1, 1] if num_params == 3 else [1, 1],
+                            del_aq6=del_aq6,
+                            num_params=num_params,
+                            correlated=False,
+                        )
+                        chi_sq_red = int(res.chi_sq/res.DOF)
+                        fit_label = r'$\chi_\mathrm{red}='+str(chi_sq_red)+r'$'
+                        a4_diff = diff - res.val[-1] * del_aq6
+                        ax[v_idx].errorbar(
+                            np.abs(del_aq4),
+                            a4_diff.val,
+                            yerr=a4_diff.err,
+                            fmt="o",
+                            capsize=4,
+                            color=pltcolors[momvar_idx],
+                            label=label,
+                        )
+                        self.twist_diffs[sub_idx + 1][momvar_idx + 1][vertex].update(
+                            {"del_aq6": del_aq6, "Z_diff_no_aq6": a4_diff}
+                        )
+                        xmin, xmax = ax[v_idx].get_xlim()
+                        xrange = np.linspace(0, xmax, 50)
+                        yrange = res[-2] * xrange
+                        yrange *= 1 if sign > 0 else -1
+                        ax[v_idx].fill_between(
+                            xrange,
+                            yrange.val + yrange.err,
+                            yrange.val - yrange.err,
+                            color=pltcolors[momvar_idx],
+                            alpha=0.2,
+                            label=fit_label,
+                        )
+                        ax[v_idx].set_xlim([xmin, xmax])
 
-        ax[-1].set_xlabel(r"$\sqrt{q^2}$ [GeV]")
+        ax[-1].set_xlabel(r"$\Delta \sum_i(aq_i)^4$")
         handles, labels = ax[-1].get_legend_handles_labels()
         legend = fig.legend(
             handles,
@@ -94,12 +170,15 @@ class Fourquark:
         callPDF(fname, show=show)
         print(f"plotted to {os.getcwd()}/{fname}")
 
+        self.aq4 = {key: np.sum(arr**4, axis=1)
+                    for key, arr in self.aqvecs.items()}
+
     def plot_chiral_extrap_allmomvar(self, subscheme: str, show: bool = False) -> None:
         fig, ax = plt.subplots(
             nrows=len(self.decay_vertices), sharex=True, gridspec_kw={"hspace": 0}
         )
         sublabel = r"\gamma_\mu" if subscheme == "gamma" else r"\not{q}"
-        title = self.scheme + r"$^{" + sublabel + r"}$, $m_\pi=0$, all combos"
+        title = self.scheme + r"$^{" + sublabel + r"}$, $m_\pi=0$, all twists"
         plt.suptitle(title)
 
         for momvar_idx in range(self.N_tw):
@@ -115,7 +194,8 @@ class Fourquark:
                 )
                 if momvar_idx == 0:
                     ax[v_idx].set_ylabel(
-                        r"$Z" + self.decay_vtx_str[v_idx] + r"/Z_" + self.norm + r"^2$"
+                        r"$Z" + self.decay_vtx_str[v_idx] +
+                        r"/Z_" + self.norm + r"^2$"
                     )
 
         ax[-1].set_xlabel(r"$\sqrt{q^2}$ [GeV]")
@@ -127,7 +207,7 @@ class Fourquark:
             ncol=self.N_tw,
             fontsize="small",
             columnspacing=0.5,
-            bbox_to_anchor=(0.5, 0.87),
+            bbox_to_anchor=(0.5, 0.9),
         )
         legend.get_frame().set_facecolor("white")
         legend.get_frame().set_alpha(1)
@@ -142,7 +222,8 @@ class Fourquark:
 
         self.compute = False
         Zs = self.get_Z_all_masses(momvar_idx, subscheme, plot=False)
-        self.pion = TwoPointFn(self.ens.name, compute=False, scheme=self.scheme)
+        self.pion = TwoPointFn(
+            self.ens.name, compute=False, scheme=self.scheme)
         self.pion_masses = join_stats(self.pion.load_meson_masses())
 
         file = h5py.File(self.Zdata_fname, "r")
@@ -161,7 +242,7 @@ class Fourquark:
 
         if plot:
             fig, ax = plt.subplots(
-                nrows=len(self.decay_vertices), ncols=1, figsize=(3, 10)
+                nrows=len(self.decay_vertices), ncols=1, figsize=(3, 5)
             )
             plt.subplots_adjust(hspace=0)
             sublabel = r"\gamma_\mu" if subscheme == "gamma" else r"\not{q}"
@@ -197,7 +278,8 @@ class Fourquark:
                         label=r"$m_\pi=" + pion_label + r"$",
                     )
                 ax[v_idx].set_ylabel(
-                    r"$Z" + self.decay_vtx_str[v_idx] + r"/Z_" + self.norm + r"^2$"
+                    r"$Z" + self.decay_vtx_str[v_idx] +
+                    r"/Z_" + self.norm + r"^2$"
                 )
 
             ax[-1].set_xlabel(r"$\sqrt{q^2}$ [GeV]")
@@ -275,8 +357,8 @@ class Fourquark:
             self.pion_masses = join_stats(self.pion.load_meson_masses())
         else:
             print(
-                f"mismatch between NPR masses {self.masses} and "+\
-                        "\nvalence masses {self.pion.masses}"
+                f"mismatch between NPR masses {self.masses} and "
+                + "\nvalence masses {self.pion.masses}"
             )
             return None
 
@@ -286,7 +368,8 @@ class Fourquark:
             extrap[vertex] = []
             for m_idx in tqdm(range(len(self.momenta)), leave=False, desc=vertex):
                 mom = self.momenta[m_idx]
-                ys = join_stats([Zs[mass][vertex][m_idx] for mass in self.masses])
+                ys = join_stats([Zs[mass][vertex][m_idx]
+                                for mass in self.masses])
                 res = fit_func(
                     self.pion_masses, ys, chiral_ansatz, [1, 1], correlated=False
                 )
@@ -295,7 +378,8 @@ class Fourquark:
 
         if save:
             file = h5py.File(self.Zdata_fname, "a")
-            grp_name = f"Fourquark/m0p0/{subscheme}" + f"/momvar_{momvar_idx+1}"
+            grp_name = f"Fourquark/m0p0/{subscheme}" + \
+                f"/momvar_{momvar_idx+1}"
 
             if grp_name in file.keys():
                 del file[grp_name]
@@ -303,12 +387,15 @@ class Fourquark:
             grp = file.create_group(grp_name)
             grp.attrs["momentum_variation"] = self.mom_combos[momvar_idx]
 
-            grp.create_dataset("ap", data=np.array(self.momenta) / self.ens.ainv)
-            grp.create_dataset("aq", data=self.qvecs[momvar_idx])
+            grp.create_dataset("ap", data=np.array(
+                self.momenta) / self.ens.ainv)
+            grp.create_dataset("aq", data=self.aqvecs[momvar_idx + 1])
             for vertex in self.decay_vertices:
-                grp.create_dataset(f"{vertex}/central", data=extrap[vertex].val)
+                grp.create_dataset(f"{vertex}/central",
+                                   data=extrap[vertex].val)
                 grp.create_dataset(f"{vertex}/errors", data=extrap[vertex].err)
-                grp.create_dataset(f"{vertex}/bootstrap", data=extrap[vertex].btsp)
+                grp.create_dataset(f"{vertex}/bootstrap",
+                                   data=extrap[vertex].btsp)
 
             print(f"saved data to {grp_name} in {self.Zdata_fname}")
 
@@ -335,7 +422,8 @@ class Fourquark:
     ) -> Dict:
 
         Zs = {
-            mass: self.get_Z_all_mom(mass, momvar_idx, subscheme, run=run, **kwargs)
+            mass: self.get_Z_all_mom(
+                mass, momvar_idx, subscheme, run=run, **kwargs)
             for mass in self.masses
         }
 
@@ -363,7 +451,8 @@ class Fourquark:
                         label=f"{np.around(mass, 3)}",
                     )
                 ax[v_idx].set_ylabel(
-                    r"$Z" + self.decay_vtx_str[v_idx] + r"/Z_" + self.norm + r"^2$"
+                    r"$Z" + self.decay_vtx_str[v_idx] +
+                    r"/Z_" + self.norm + r"^2$"
                 )
 
             ax[-1].set_xlabel(r"$\sqrt{q^2}$ [GeV]")
@@ -392,7 +481,8 @@ class Fourquark:
                 range(len(self.momenta)), leave=False, desc=str(np.around(mass, 3))
             ):
                 mom = self.momenta[idx]
-                proj_verts = self.project_vertices(mass, mom, momvar_idx, subscheme)
+                proj_verts = self.project_vertices(
+                    mass, mom, momvar_idx, subscheme)
                 for key, vertex in proj_verts.items():
                     if key in Zs:
                         Zs[key].append(vertex ** (-1))
@@ -407,7 +497,8 @@ class Fourquark:
             Zs = self.load_Z_factors(mass, momvar_idx, subscheme)
 
         if normalise:
-            Z_bl = self.bilinear.get_Z_all_mom(mass, momvar_idx, subscheme)[self.norm]
+            Z_bl = self.bilinear.get_Z_all_mom(
+                mass, momvar_idx, subscheme)[self.norm]
             for vertex, mtx in Zs.copy().items():
                 Zs[vertex] = mtx / (Z_bl**2)
 
@@ -422,9 +513,8 @@ class Fourquark:
                 + r"$ mom combo "
                 + str(momvar_idx + 1)
             )
-            fname = (
-                f"plots/{self.ens.name}_fq_Zs_{self.mass_map[mass]}_tw{momvar_idx}.pdf"
-            )
+            fname = f"plots/{self.ens.name}_fq_Zs_{
+                self.mass_map[mass]}_tw{momvar_idx}.pdf"
             self.plot_Z_factors(Zs, title, fname)
 
         return Zs
@@ -433,12 +523,14 @@ class Fourquark:
 
         file = h5py.File(self.Zdata_fname, "r")
         grp_name = (
-            f"Fourquark/{self.mass_map[mass]}/{subscheme}" + f"/momvar_{momvar_idx+1}"
+            f"Fourquark/{self.mass_map[mass]
+                         }/{subscheme}"
+            + f"/momvar_{momvar_idx+1}"
         )
 
         grp = file[grp_name]
         self.momenta = list(np.array(grp["ap"][:]) * self.ens.ainv)
-        self.qvecs[momvar_idx] = np.array(grp["aq"][:])
+        self.aqvecs[momvar_idx + 1] = np.array(grp["aq"][:])
         Zs = {}
         for vertex in grp.keys():
             if vertex not in ["ap", "aq"]:
@@ -457,7 +549,9 @@ class Fourquark:
 
         file = h5py.File(self.Zdata_fname, "a")
         grp_name = (
-            f"Fourquark/{self.mass_map[mass]}/{subscheme}" + f"/momvar_{momvar_idx+1}"
+            f"Fourquark/{self.mass_map[mass]
+                         }/{subscheme}"
+            + f"/momvar_{momvar_idx+1}"
         )
 
         if grp_name in file.keys():
@@ -467,7 +561,7 @@ class Fourquark:
         grp.attrs["momentum_variation"] = self.mom_combos[momvar_idx]
 
         grp.create_dataset("ap", data=np.array(self.momenta) / self.ens.ainv)
-        grp.create_dataset("aq", data=self.qvecs[momvar_idx])
+        grp.create_dataset("aq", data=self.aqvecs[momvar_idx + 1])
 
         for vertex in Zs.keys():
             grp.create_dataset(f"{vertex}/central", data=Zs[vertex].val)
@@ -513,10 +607,12 @@ class Fourquark:
         for key, mtx in amputees.items():
             proj = projectors[key]
             projected[key] = Stat(
-                val=np.einsum("abcd,badc", proj.val, mtx.val, optimize=True).real,
+                val=np.einsum("abcd,badc", proj.val,
+                              mtx.val, optimize=True).real,
                 btsp=np.array(
                     [
-                        np.einsum("abcd,badc", proj.btsp[k], mtx.btsp[k], optimize=True)
+                        np.einsum(
+                            "abcd,badc", proj.btsp[k], mtx.btsp[k], optimize=True)
                         for k in range(mtx.N_boot)
                     ]
                 ).real,
@@ -541,7 +637,8 @@ class Fourquark:
         amputees = {}
         for key, mtx in operators.items():
             amputees[key] = Stat(
-                val=fourquark_amputation(out_prop_inv.val, in_prop_inv.val, mtx.val),
+                val=fourquark_amputation(
+                    out_prop_inv.val, in_prop_inv.val, mtx.val),
                 btsp=np.array(
                     [
                         fourquark_amputation(
@@ -559,14 +656,16 @@ class Fourquark:
         doubles = {
             "VA": sum(
                 [
-                    fqs[self.vertices.index([f"Gamma{mu}", f"Gamma{mu}Gamma5"])]
+                    fqs[self.vertices.index(
+                        [f"Gamma{mu}", f"Gamma{mu}Gamma5"])]
                     for mu in dirs
                 ],
                 Zero(fqs[0].shape),
             ),
             "AV": sum(
                 [
-                    fqs[self.vertices.index([f"Gamma{mu}Gamma5", f"Gamma{mu}"])]
+                    fqs[self.vertices.index(
+                        [f"Gamma{mu}Gamma5", f"Gamma{mu}"])]
                     for mu in dirs
                 ],
                 Zero(fqs[0].shape),
@@ -641,7 +740,8 @@ class Fourquark:
 
         for cf in range(self.N_cf):
             try:
-                corr = h5py.File(files[cf], "r")["ExternalLeg"]["corr"][0, 0, :]
+                corr = h5py.File(files[cf], "r")[
+                    "ExternalLeg"]["corr"][0, 0, :]
             except OSError:
                 print(fname)
                 pdb.set_trace()
@@ -668,8 +768,10 @@ class Fourquark:
             if [mom1, mom2] in mom_combinations:
                 continue
             else:
-                partial_str = f"{self.prefix}" + "_".join(mom1) + "_" + "_".join(mom2)
-                other_configs = [f for f in all_files if f.startswith(partial_str)]
+                partial_str = f"{self.prefix}" + \
+                    "_".join(mom1) + "_" + "_".join(mom2)
+                other_configs = [
+                    f for f in all_files if f.startswith(partial_str)]
                 if len(other_configs) == self.N_cf:
                     mom_combinations.append([mom1, mom2])
                 else:
@@ -693,14 +795,15 @@ class Fourquark:
         }
 
         self.mom_map = {
-            np.linalg.norm(convert_to_phys(theta[0][0], self.ens.L, self.ens.T))
+            np.linalg.norm(convert_to_phys(
+                theta[0][0], self.ens.L, self.ens.T))
             * self.ens.ainv: mom_str
             for mom_str, theta in self.theta_str[self.mass_map[self.masses[0]]].items()
         }
         self.momenta = sorted(list(self.mom_map.keys()))
 
-        self.qvecs = {
-            momvar_idx: np.zeros(shape=(len(self.momenta), N_dir))
+        self.aqvecs = {
+            momvar_idx + 1: np.zeros(shape=(len(self.momenta), N_dir))
             for momvar_idx in range(self.N_tw)
         }
         for momvar_idx in range(self.N_tw):
@@ -710,7 +813,7 @@ class Fourquark:
                 theta_in, theta_out = self.theta_str[mass_str][mom_str][momvar_idx]
                 p_in = convert_to_phys(theta_in, self.ens.L, self.ens.T)
                 p_out = convert_to_phys(theta_out, self.ens.L, self.ens.T)
-                self.qvecs[momvar_idx][mom_idx, :] = (
+                self.aqvecs[momvar_idx + 1][mom_idx, :] = (
                     p_in - p_out if self.scheme == "SMOM" else p_in
                 )
 
@@ -723,24 +826,25 @@ def fourquark_projectors(subscheme: str, qvec: np.ndarray) -> Dict:
 
     if subscheme == "qslash":
         qvec = np.sin(qvec)
-        qslash = np.sum([qvec[i] * myGamma[dirs[i]] for i in range(N_dir)], axis=0)
+        qslash = np.sum([qvec[i] * myGamma[dirs[i]]
+                        for i in range(N_dir)], axis=0)
         qsq = qvec.dot(qvec)
         # replace \gamma_\mu with \slashed{q}q_\mu/q^2
         for i in range(N_dir):
             myGamma[dirs[i]] = qslash * qvec[i] / qsq
 
-    doubles = {
-        "VA": np.sum(
-            [np.tensordot(myGamma[i], myGamma[i] @ myGamma["5"], axes=0) for i in dirs],
-            axis=0,
-        ),
-        "AV": np.sum(
-            [np.tensordot(myGamma[i] @ myGamma["5"], myGamma[i], axes=0) for i in dirs],
-            axis=0,
-        ),
-    }
+    VA = np.sum(
+        [np.tensordot(myGamma[i], myGamma[i] @ myGamma["5"], axes=0)
+         for i in dirs],
+        axis=0,
+    )
+    AV = np.sum(
+        [np.tensordot(myGamma[i] @ myGamma["5"], myGamma[i], axes=0)
+         for i in dirs],
+        axis=0,
+    )
 
-    projectors = {"VApAV": doubles["VA"] + doubles["AV"]}
+    projectors = {"VApAV": VA + AV}
 
     for key, mtx in projectors.copy().items():
         transposed_mtx = mtx.swapaxes(1, 3)
@@ -762,3 +866,12 @@ def fourquark_amputation(out_, in_, op_):
     """amputates external legs of fourquark Green"s functions"""
 
     return np.einsum("ea,bf,gc,dh,abcd->efgh", out_, in_, out_, in_, op_, optimize=True)
+
+
+def twist_diff_ansatz(del_aq4, param, del_aq6=None, num_params=2, **kwargs):
+    if not isinstance(del_aq6, np.ndarray):
+        raise Exception("del_aq6 not passed")
+    if num_params == 3:
+        return param[0] + param[1] * del_aq4 + param[2] * del_aq6
+    else:
+        return param[0] * del_aq4 + param[1] * del_aq6

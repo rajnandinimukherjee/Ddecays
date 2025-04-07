@@ -13,10 +13,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from plot_settings import plotparams
+
+import matplotlib.colors as mcolors
+pltcolors = list(mcolors.TABLEAU_COLORS.keys())
+
 plt.rcParams.update(plotparams)
 
 N_col = 3
-dirs = ['X', 'Y', 'Z', 'T']
+dirs = ["X", "Y", "Z", "T"]
 N_dir = len(dirs)
 
 
@@ -28,18 +32,17 @@ def st_dev(data, mean=None, **kwargs) -> np.ndarray:
     n = len(data)
     if mean is None:
         mean = np.mean(data)
-    return ((data - mean).dot(data - mean)/n)**0.5
+    return ((data - mean).dot(data - mean) / n) ** 0.5
 
 
 class Stat:
-    """ new datatype which stores bootstrap info and
+    """new datatype which stores bootstrap info and
     can interacts with scalars or other instances of
-    the same class for basic mathematical operations """
+    the same class for basic mathematical operations"""
 
     N_boot = 1000
 
-    def __init__(self, val, err=None, btsp=None,
-                 dtype=None, seed=None, **kwargs):
+    def __init__(self, val, err=None, btsp=None, dtype=None, seed=None, **kwargs):
         self.val = np.array(val)
         self.shape = self.val.shape
         self.dtype = self.val.dtype if dtype is None else dtype
@@ -104,7 +107,7 @@ class Stat:
         central = func(self.val, **kwargs)
 
         btsp = np.array([func(self.btsp[k,], **kwargs)
-                         for k in range(self.N_boot)])
+                        for k in range(self.N_boot)])
 
         return Stat(val=central, err="fill", btsp=btsp)
 
@@ -184,14 +187,15 @@ class Stat:
         key = indices
         if not isinstance(key, tuple):
             key = (key,)
-        new_stat = Stat(val=self.val[key],
-                        err=self.err[key],
-                        btsp=self.btsp[(slice(None),)+key])
+        new_stat = Stat(
+            val=self.val[key], err=self.err[key], btsp=self.btsp[(
+                slice(None),) + key]
+        )
         return new_stat
 
 
 def Zero(shape: Tuple) -> Stat:
-    return Stat(val=np.zeros(shape=shape), btsp='fill')
+    return Stat(val=np.zeros(shape=shape), btsp="fill")
 
 
 def join_stats(stats):
@@ -202,8 +206,7 @@ def join_stats(stats):
     )
 
 
-def bootstrap(data: np.ndarray, Nboot: int = Stat.N_boot,
-              seed=1) -> np.ndarray:
+def bootstrap(data: np.ndarray, Nboot: int = Stat.N_boot, seed=1) -> np.ndarray:
     """bootstrap samples generator - if input data has same size as Nboot,
     assumes it's already a bootstrap sample and does no further sampling"""
 
@@ -227,7 +230,7 @@ def bootstrap(data: np.ndarray, Nboot: int = Stat.N_boot,
 
 
 def callPDF(filename: str, show: bool = True) -> None:
-    """ plots matplotlib graphics into pdfs, saves and shows"""
+    """plots matplotlib graphics into pdfs, saves and shows"""
 
     pdf = PdfPages(filename)
     fig_nums = plt.get_fignums()
@@ -241,8 +244,8 @@ def callPDF(filename: str, show: bool = True) -> None:
 
 
 def err_disp(num, err, n=2, sys_err=None, **kwargs):
-    """ converts num and err into num(err) in
-    scientific notation upto n digits in error """
+    """converts num and err into num(err) in
+    scientific notation upto n digits in error"""
 
     if err == 0.0:
         return str(np.around(num, 2))
@@ -286,9 +289,15 @@ def COV(data, **kwargs):
         center = np.mean(data, axis=0)
         norm = C - 1
 
-    COV = np.array([[((data[:, t1] - center[t1]).
-                    dot(data[:, t2] - center[t2])) / norm
-                   for t2 in range(T)]for t1 in range(T)])
+    COV = np.array(
+        [
+            [
+                ((data[:, t1] - center[t1]).dot(data[:, t2] - center[t2])) / norm
+                for t2 in range(T)
+            ]
+            for t1 in range(T)
+        ]
+    )
 
     return COV
 
@@ -317,10 +326,7 @@ def fit_func(
 ):
 
     if not isinstance(x, Stat):
-        x = Stat(
-            val=x,
-            err=np.zeros(shape=np.array(x).shape),
-            btsp='fill')
+        x = Stat(val=x, err=np.zeros(shape=np.array(x).shape), btsp="fill")
 
     if type(end) is None:
         end = len(x.val)
@@ -336,8 +342,10 @@ def fit_func(
         return out - ansatz(inp, param, **kwargs)
 
     def LD(param):
-        return L.dot(diff(x.val[start:end], y.val[start:end],
-                          param, fit="central"))
+        return L.dot(
+            diff(x.val[start:end], y.val[start:end],
+                 param, fit="central", **kwargs)
+        )
 
     res = least_squares(LD, guess, ftol=1e-10, gtol=1e-10)
     if verbose:
@@ -352,8 +360,14 @@ def fit_func(
 
         def LD_k(param):
             return L.dot(
-                diff(x.btsp[k, start:end], y.btsp[k, start:end],
-                     param, fit="btsp", k=k)
+                diff(
+                    x.btsp[k, start:end],
+                    y.btsp[k, start:end],
+                    param,
+                    fit="btsp",
+                    k=k,
+                    **kwargs,
+                )
             )
 
         res_k = least_squares(LD_k, guess, ftol=1e-10, gtol=1e-10)
@@ -369,11 +383,13 @@ def fit_func(
             xvals = Stat(val=np.array(xvals), btsp="fill")
 
         return Stat(
-            val=ansatz(xvals.val, res.val, fit="recon"),
+            val=ansatz(xvals.val, res.val, fit="recon", **kwargs),
             err="fill",
             btsp=np.array(
-                [ansatz(xvals.btsp[k,], res.btsp[k], fit="recon")
-                 for k in range(Nboot)]
+                [
+                    ansatz(xvals.btsp[k,], res.btsp[k], fit="recon", **kwargs)
+                    for k in range(Nboot)
+                ]
             ),
         )
 
@@ -389,11 +405,81 @@ def fit_func(
 
 
 def foldcorr(corr: np.ndarray, T: int) -> np.ndarray:
-    return 0.5*(corr[1:]+corr[::-1][:-1])[:int(T/2)]
+    return 0.5 * (corr[1:] + corr[::-1][:-1])[: int(T / 2)]
 
 
-# ===== gamma matrices according to Grid conventions =================
-N_cd = N_col*N_dir
+def closest_n_points(values: np.ndarray, target: float, n: int, **kwargs) -> List:
+    diff = np.abs(values - target)
+    sort = np.sort(diff)
+    closest_idx = []
+    for n_idx in range(n):
+        nth_closest_point = list(diff).index(sort[n_idx])
+        closest_idx.append(nth_closest_point)
+    return closest_idx
+
+
+def interpolate(
+    x: Stat, y: Stat, target: Stat, fittype: str = "linear", **kwargs
+) -> Stat:
+    if fittype == "linear":
+        indices = np.sort(closest_n_points(x.val, target.val, n=2))
+        x_1, y_1 = x[indices[0]], y[indices[0]]
+        x_2, y_2 = x[indices[1]], y[indices[1]]
+        slope = (y_2 - y_1) / (x_2 - x_1)
+        intercept = y_1 - slope * x_1
+
+        pred = intercept + slope * target
+        pred.x_grain = np.linspace(x.val[indices[0]], x.val[indices[-1]], 20)
+        pred.y_grain = join_stats(
+            [intercept + slope * g for g in pred.x_grain])
+
+    elif fittype == "quadratic":
+        indices = np.sort(closest_n_points(x.val, target.val, n=3))
+        x_1, y_1 = x[indices[0]], y[indices[0]]
+        x_2, y_2 = x[indices[1]], y[indices[1]]
+        x_3, y_3 = x[indices[2]], y[indices[2]]
+
+        a = (
+            y_1 / ((x_1 - x_2) * (x_1 - x_3))
+            + y_2 / ((x_2 - x_1) * (x_2 - x_3))
+            + y_3 / ((x_3 - x_1) * (x_3 - x_2))
+        )
+
+        b = (
+            -y_1 * (x_2 + x_3) / ((x_1 - x_2) * (x_1 - x_3))
+            - y_2 * (x_1 + x_3) / ((x_2 - x_1) * (x_2 - x_3))
+            - y_3 * (x_1 + x_2) / ((x_3 - x_1) * (x_3 - x_2))
+        )
+
+        c = (
+            y_1 * x_2 * x_3 / ((x_1 - x_2) * (x_1 - x_3))
+            + y_2 * x_1 * x_3 / ((x_2 - x_1) * (x_2 - x_3))
+            + y_3 * x_1 * x_2 / ((x_3 - x_1) * (x_3 - x_2))
+        )
+
+        pred = a * (target**2) + b * target + c
+        pred.x_grain = np.linspace(x.val[indices[0]], x.val[indices[-1]], 20)
+        pred.y_grain = join_stats(
+            [a * (g**2) + b * g + c for g in pred.x_grain])
+
+    elif fittype == "both":
+        lin_pred = interpolate(x, y, target, fittype="linear")
+        quad_pred = interpolate(x, y, target, fittype="quadratic")
+
+        stat_err = np.max(lin_pred.val, quad_pred.val)
+        sys_err = 0.5 * (lin_pred.val - quad_pred.val)
+        pred = Stat(
+            val=0.5 * (lin_pred.val + quad_pred.val),
+            err=np.hypot(stat_err, sys_err),
+            btsp="fill",
+        )
+
+    return pred
+
+    # ===== gamma matrices according to Grid conventions =================
+
+
+N_cd = N_col * N_dir
 
 gamma = {
     "I": np.identity(N_dir, dtype="complex128"),
@@ -413,11 +499,12 @@ gamma["5"] = gamma["X"] @ gamma["Y"] @ gamma["Z"] @ gamma["T"]
 
 # =====put color structure into gamma matrices====================
 Gamma = {
-    name: np.einsum("ab,cd->abcd", mtx, np.identity(N_col)).
-    swapaxes(1, 2).reshape((N_cd, N_cd), order='F')
+    name: np.einsum("ab,cd->abcd", mtx, np.identity(N_col))
+    .swapaxes(1, 2)
+    .reshape((N_cd, N_cd), order="F")
     for name, mtx in gamma.items()
 }
 
 
 def g5(prop: np.ndarray) -> np.ndarray:
-    return Gamma['5']@prop.conj().T@Gamma['5']
+    return Gamma["5"] @ prop.conj().T @ Gamma["5"]
